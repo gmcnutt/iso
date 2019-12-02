@@ -118,6 +118,7 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
 
         map_x = screen_x(map_h - 1, 0);
 
+        /* Paint the ground */
         for (row = 0; row < map_h; row++) {
                 for (col = 0; col < map_w; col++) {
                         dst.x = screen_x(col, row) + map_x;
@@ -126,17 +127,23 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
                 }
         }
 
-        /* Paint a column */
-        row = 0;
-        col = 0;
-        SDL_QueryTexture(textures[1], NULL, NULL, &dst.w, &dst.h);
-        dst.x = screen_x(col, row) + map_x;
-        dst.y = screen_y(col, row) - (dst.h - TILE_HEIGHT);
-        SDL_RenderCopy(renderer, textures[1], NULL, &dst);
-
         /* Paint the grid */
         SDL_SetRenderDrawColor(renderer, 0, 255, 255, 128);
         iso_grid(renderer, map_w, map_h);
+
+        /* Paint a column */
+        row = 5;
+        col = 5;
+        SDL_QueryTexture(textures[1], NULL, NULL, &dst.w, &dst.h);
+        dst.x = screen_x(col, row) + map_x;
+        dst.y = screen_y(col, row) - (dst.h - TILE_HEIGHT);
+        if (row > cursor_y || col > cursor_x) {
+                SDL_SetTextureAlphaMod(textures[1], 128);
+        } else {
+                SDL_SetTextureAlphaMod(textures[1], 255);
+
+        };
+        SDL_RenderCopy(renderer, textures[1], NULL, &dst);
 
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
