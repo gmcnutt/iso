@@ -10,6 +10,8 @@ struct args {
         char *cmd;
 };
 
+static int cursor_x = 0;
+static int cursor_y = 0;
 
 /**
  * Handle key presses.
@@ -18,12 +20,16 @@ void on_keydown(SDL_KeyboardEvent *event, int *quit)
 {
         switch (event->keysym.sym) {
         case SDLK_LEFT:
+                cursor_x --;
                 break;
         case SDLK_RIGHT:
+                cursor_x++;
                 break;
         case SDLK_UP:
+                cursor_y--;
                 break;
         case SDLK_DOWN:
+                cursor_y++;
                 break;
         case SDLK_q:
                 *quit = 1;
@@ -120,15 +126,23 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
                 }
         }
 
+        /* Paint a column */
         row = 0;
         col = 0;
         SDL_QueryTexture(textures[1], NULL, NULL, &dst.w, &dst.h);
         dst.x = screen_x(col, row) + map_x;
         dst.y = screen_y(col, row) - (dst.h - TILE_HEIGHT);
         SDL_RenderCopy(renderer, textures[1], NULL, &dst);
-        
+
+        /* Paint the grid */
         SDL_SetRenderDrawColor(renderer, 0, 255, 255, 128);
         iso_grid(renderer, map_w, map_h);
+
+        /* Paint a red square for a cursor position */
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+        iso_square(renderer, map_w, map_h, cursor_x, cursor_y);
+        
+        
 }
 
 static void render(SDL_Renderer *renderer, SDL_Texture **textures)

@@ -19,6 +19,11 @@ void iso_fill(SDL_Renderer *renderer, SDL_Texture *texture, SDL_Rect *srcrect,
               int map_w, int map_h);
 
 /**
+ * Render an isometric square around the map location.
+ */
+void iso_square(SDL_Renderer *renderer, int map_w, int map_h, int map_x, int map_y);
+
+/**
  * Render isometric grid lines.
  */
 void iso_grid(SDL_Renderer *renderer, int map_w, int map_h);

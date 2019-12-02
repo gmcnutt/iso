@@ -103,6 +103,18 @@ void iso_grid(SDL_Renderer *renderer, int map_w, int map_h)
         }
 }
 
+void iso_square(SDL_Renderer *renderer, int map_w, int map_h, int map_x, int map_y)
+{
+        int off_x = map_to_screen_x(map_h, 0);
+        SDL_Point points[5] = {
+                {off_x + map_to_screen_x(map_x, map_y), map_to_screen_y(map_x, map_y)},
+                {off_x + map_to_screen_x(map_x + 1, map_y), map_to_screen_y(map_x + 1, map_y)},
+                {off_x + map_to_screen_x(map_x + 1, map_y + 1), map_to_screen_y(map_x + 1, map_y + 1)},
+                {off_x + map_to_screen_x(map_x, map_y + 1), map_to_screen_y(map_x, map_y + 1)},
+                {off_x + map_to_screen_x(map_x, map_y), map_to_screen_y(map_x, map_y)},
+        };
+        SDL_RenderDrawLines(renderer, points, 5);
+}
 
 int iso_screen_to_map(int screen_x, int screen_y, int *map_x, int *map_y)
 {
