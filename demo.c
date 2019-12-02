@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <stdio.h>
 
+#include "iso.h"
 
 struct args {
         char *filename;
@@ -95,7 +96,7 @@ static int screen_y(int map_x, int map_y)
         return (map_x + map_y) * TILE_HEIGHT_HALF;
 }
 
-static void render_iso_test(SDL_Renderer *renderer, SDL_Texture *texture,
+static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
                             int off_x, int off_y, int map_w, int map_h)
 {
         int row, col, map_x;
@@ -115,15 +116,25 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture *texture,
                 for (col = 0; col < map_w; col++) {
                         dst.x = screen_x(col, row) + map_x;
                         dst.y = screen_y(col, row);
-                        SDL_RenderCopy(renderer, texture, &src, &dst);
+                        SDL_RenderCopy(renderer, textures[0], &src, &dst);
                 }
         }
+
+        row = 0;
+        col = 0;
+        SDL_QueryTexture(textures[1], NULL, NULL, &dst.w, &dst.h);
+        dst.x = screen_x(col, row) + map_x;
+        dst.y = screen_y(col, row) - (dst.h - TILE_HEIGHT);
+        SDL_RenderCopy(renderer, textures[1], NULL, &dst);
+        
+        SDL_SetRenderDrawColor(renderer, 0, 255, 255, 128);
+        iso_grid(renderer, map_w, map_h);
 }
 
-static void render(SDL_Renderer *renderer, SDL_Texture *texture)
+static void render(SDL_Renderer *renderer, SDL_Texture **textures)
 {
         clear_screen(renderer);
-        render_iso_test(renderer, texture, 0, 0, 10, 10);
+        render_iso_test(renderer, textures, 0, 0, 13, 11);
         SDL_RenderPresent(renderer);
 }
 
@@ -152,7 +163,7 @@ int main(int argc, char **argv)
         SDL_Event event;
         SDL_Window *window=NULL;
         SDL_Renderer *renderer=NULL;
-        SDL_Texture *texture=NULL;
+        SDL_Texture *textures[2]={NULL};
         int done=0;
         Uint32 start_ticks, end_ticks, frames=0;
         struct args args;
@@ -185,9 +196,16 @@ int main(int argc, char **argv)
         }
 
         /* Load the texture image */
-        if (! (texture = load_texture(
+        if (! (textures[0] = load_texture(
                        renderer,
                        "grass.png"))) {
+                goto destroy_renderer;
+        }
+
+        /* Load the texture image */
+        if (! (textures[1] = load_texture(
+                       renderer,
+                       "wall.png"))) {
                 goto destroy_renderer;
         }
 
@@ -205,14 +223,14 @@ int main(int argc, char **argv)
                                 break;
                         case SDL_WINDOWEVENT:
                                 frames++;
-                                render(renderer, texture);
+                                render(renderer, textures);
                                 break;
                         default:
                                 break;
                         }
                 }
 
-                render(renderer, texture);
+                render(renderer, textures);
         }
 
         end_ticks = SDL_GetTicks();
@@ -223,7 +241,7 @@ int main(int argc, char **argv)
                         );
         }
 
-        SDL_DestroyTexture(texture);
+        SDL_DestroyTexture(textures[0]);
 destroy_renderer:
         SDL_DestroyRenderer(renderer);
 destroy_window:

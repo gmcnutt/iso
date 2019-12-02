@@ -8,8 +8,8 @@
 /* XXX: replace hard-coded values with something else, like an iso context. */
 #define MAP_HEIGHT 10
 #define MAP_WIDTH 10
-#define TILE_WIDTH 64
-#define TILE_HEIGHT 32
+#define TILE_WIDTH 36
+#define TILE_HEIGHT 18
 #define TILE_WIDTH_HALF (TILE_WIDTH / 2)
 #define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 
