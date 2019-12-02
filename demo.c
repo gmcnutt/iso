@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <stdio.h>
 
+#include "fov.h"
 #include "iso.h"
 
 struct args {
@@ -10,8 +11,12 @@ struct args {
         char *cmd;
 };
 
+static const int MAP_W = 13;
+static const int MAP_H = 11;
+static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
+static fov_map_t map;
 
 /**
  * Handle key presses.
@@ -131,7 +136,8 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
         SDL_SetRenderDrawColor(renderer, 0, 255, 255, 128);
         iso_grid(renderer, map_w, map_h);
 
-        /* Paint a column */
+        /* Paint a column, semi-transparent if the cursor should be able to see
+         * beyond it. */
         row = 5;
         col = 5;
         SDL_QueryTexture(textures[1], NULL, NULL, &dst.w, &dst.h);
@@ -145,6 +151,19 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
         };
         SDL_RenderCopy(renderer, textures[1], NULL, &dst);
 
+        /* Paint fov squares. */
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);
+        map.opq[col + row * MAP_W] = 1;
+        fov(&map, cursor_x, cursor_y, FOV_RAD);
+        for (row = 0; row < map_h; row++) {
+                for (col = 0; col < map_w; col++) {
+                        if (map.vis[col + row * map.w]) {
+                                iso_square(renderer, map_w, map_h, col, row);
+                        }
+                }
+        }
+        
+
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
         iso_square(renderer, map_w, map_h, cursor_x, cursor_y);
@@ -155,7 +174,7 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
 static void render(SDL_Renderer *renderer, SDL_Texture **textures)
 {
         clear_screen(renderer);
-        render_iso_test(renderer, textures, 0, 0, 13, 11);
+        render_iso_test(renderer, textures, 0, 0, MAP_W, MAP_H);
         SDL_RenderPresent(renderer);
 }
 
@@ -229,6 +248,12 @@ int main(int argc, char **argv)
                        "wall.png"))) {
                 goto destroy_renderer;
         }
+
+        /* Setup the fov map. */
+        map.w = MAP_W;
+        map.h = MAP_H;
+        map.opq = calloc(1, map.w * map.h);
+        map.vis = calloc(1, map.w * map.h);
 
         start_ticks = SDL_GetTicks();
 

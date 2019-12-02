@@ -6,7 +6,7 @@ CFLAGS = `pkg-config --cflags sdl2 SDL2_image` -Wall -g -std=c99
 CFLAGS += -I ~/include -L ~/lib -Wl,-rpath=$(HOME)/lib
 CFLAGS += -Werror -Wfatal-errors
 CFLAGS += -fPIC
-LDLIBS = `pkg-config --libs sdl2 SDL2_image` -lgcu
+LDLIBS = `pkg-config --libs sdl2 SDL2_image` -lgcu -lm
 
 ifeq ($(OPTIMIZE), true)
 	CFLAGS += -O3
