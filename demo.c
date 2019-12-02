@@ -42,8 +42,6 @@ static void print_usage(void)
                "Options: \n"
                "    -h:	help\n"
                "    -i: image filename\n"
-               "Commands:\n"
-               "    info    Show graphics info\n"
                 );
 }
 
@@ -73,82 +71,11 @@ static void parse_args(int argc, char **argv, struct args *args)
                 }
         }
 
-        /* Any remaining option is assumed to be the save-file to load the game
-         * from. If there is none then abort. */
-        if (optind < argc) {
-                args->cmd = argv[optind];
-        }
 }
 
-/**
- * Print renderer info to stdout.
- */
-static void show_renderer_info(SDL_RendererInfo *info)
-{
-        Uint32 tfi;
 
-        printf("name: %s\n", info->name);
-        printf("\tflags: 0x%x - ", info->flags);
-        if (info->flags & SDL_RENDERER_SOFTWARE) {
-                printf("software ");
-        }
-        if (info->flags & SDL_RENDERER_ACCELERATED) {
-                printf("accelerated ");
-        }
-        if (info->flags & SDL_RENDERER_PRESENTVSYNC) {
-                printf("presentvsync ");
-        }
-        if (info->flags & SDL_RENDERER_TARGETTEXTURE) {
-                printf("targettexture ");
-        }
-        printf("\n");
-        printf("\tnum_texture_formats: %d\n", info->num_texture_formats);
-        for (tfi = 0; tfi < info->num_texture_formats; tfi++) {
-                Uint32 tf = info->texture_formats[tfi];
-                printf("\tTexture format %d:\n", tfi);
-                printf("\t\tname: %s\n", SDL_GetPixelFormatName(tf));
-                printf("\t\ttype: %d\n", SDL_PIXELTYPE(tf));
-                printf("\t\torder: %d\n", SDL_PIXELORDER(tf));
-                printf("\t\tlayout: %d\n", SDL_PIXELLAYOUT(tf));
-                printf("\t\tbitsperpixel: %d\n", SDL_BITSPERPIXEL(tf));
-                printf("\t\tbytesperpixel: %d\n",
-                       SDL_BYTESPERPIXEL(tf));
-                printf("\t\tindexed: %c\n",
-                       SDL_ISPIXELFORMAT_INDEXED(tf) ? 'y': 'n');
-                printf("\t\talpha: %c\n",
-                       SDL_ISPIXELFORMAT_ALPHA(tf) ? 'y': 'n');
-                printf("\t\tfourcc: %c\n",
-                       SDL_ISPIXELFORMAT_FOURCC(tf) ? 'y': 'n');
-        }
-        printf("\tmax_texture_width: %d\n", info->max_texture_width);
-        printf("\tmax_texture_height: %d\n", info->max_texture_height);
-
-}
-
-/**
- * Print available driver info to stdout.
- */
-static void show_driver_info(void)
-{
-        int i, n;
-
-        n = SDL_GetNumRenderDrivers();
-        printf("%d renderer drivers\n", n);
-        for (i = 0; i < n; i++) {
-                SDL_RendererInfo info;
-
-                if (SDL_GetRenderDriverInfo(i, &info)) {
-                        printf("SDL_GetRenderDriverInfo(%d): %s\n",
-                               i, SDL_GetError());
-                        exit(-1);
-                }
-
-                show_renderer_info(&info);
-        }
-}
-
-#define TILE_WIDTH 64
-#define TILE_HEIGHT 32
+#define TILE_WIDTH 36
+#define TILE_HEIGHT 18
 #define TILE_WIDTH_HALF (TILE_WIDTH / 2)
 #define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 
@@ -175,7 +102,7 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture *texture,
         SDL_Rect src, dst;
 
         src.x = 0;
-        src.y = 32;
+        src.y = 0;
         src.w = TILE_WIDTH;
         src.h = TILE_HEIGHT;
 
@@ -233,12 +160,6 @@ int main(int argc, char **argv)
 
         parse_args(argc, argv, &args);
 
-        if (args.cmd) {
-                if (! strcmp(args.cmd, "info")) {
-                        show_driver_info();
-                }
-        }
-
         /* Init SDL */
         if (SDL_Init(SDL_INIT_VIDEO)) {
                 printf("SDL_Init: %s\n", SDL_GetError());
@@ -263,14 +184,10 @@ int main(int argc, char **argv)
                 goto destroy_window;
         }
 
-        SDL_RendererInfo info;
-        SDL_GetRendererInfo(renderer, &info);
-        show_renderer_info(&info);
-
         /* Load the texture image */
         if (! (texture = load_texture(
                        renderer,
-                       "/home/gmcnutt/Dropbox/projects/art/iso-64x64-outside.png"))) {
+                       "grass.png"))) {
                 goto destroy_renderer;
         }
 
