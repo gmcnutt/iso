@@ -17,6 +17,10 @@ static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
 static fov_map_t map;
+#define N_WALLS 3
+static const int walls[N_WALLS][2] = {
+        {5, 5}, {6, 5}, {5, 6}
+};
 
 /**
  * Handle key presses.
@@ -93,7 +97,7 @@ static void parse_args(int argc, char **argv, struct args *args)
 
 static void clear_screen(SDL_Renderer *renderer)
 {
-        SDL_SetRenderDrawColor(renderer, 128, 128, 128, SDL_ALPHA_OPAQUE);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 }
 
@@ -107,10 +111,28 @@ static int screen_y(int map_x, int map_y)
         return (map_x + map_y) * TILE_HEIGHT_HALF;
 }
 
+static inline int in_fov(int map_x, int map_y)
+{
+        return map.vis[map_x + map_y * MAP_W];
+}
+
+static int blocks_fov(int map_x, int map_y, int img_h)
+{
+        while (img_h > TILE_HEIGHT) {
+                if (in_fov(map_x - 1, map_y) ||
+                    in_fov(map_x, map_y - 1) ||
+                    in_fov(map_x - 1, map_y - 1)) {
+                        return 1;
+                }
+                img_h -= TILE_HEIGHT;
+        }
+        return 0;
+}
+
 static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
                             int off_x, int off_y, int map_w, int map_h)
 {
-        int row, col, idx, map_x, col_x = 5, col_y = 5;
+        int row, col, idx, map_x;
         SDL_Rect src, dst;
 
         src.x = 0;
@@ -127,7 +149,10 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
         clear_screen(renderer);
 
         /* Compute fov */
-        map.opq[col_x + col_y * MAP_W] = 1;
+        for (int i = 0; i < N_WALLS; i++) {
+                map.opq[walls[i][0] + walls[i][1] * MAP_W] = 1;
+        }
+
         fov(&map, cursor_x, cursor_y, FOV_RAD);
 
         /* Paint the ground in fov */
@@ -151,17 +176,22 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
 
         /* Paint a column, semi-transparent if the cursor should be able to see
          * beyond it. */
-        if (map.vis[col_x + col_y * MAP_W]) {
-                SDL_QueryTexture(textures[1], NULL, NULL, &dst.w, &dst.h);
-                dst.x = screen_x(col_x, col_y) + map_x;
-                dst.y = screen_y(col_x, col_y) - (dst.h - TILE_HEIGHT);
-                if (col_y > cursor_y || col_x > cursor_x) {
-                        SDL_SetTextureAlphaMod(textures[1], 128);
-                } else {
-                        SDL_SetTextureAlphaMod(textures[1], 255);
+        for (int i = 0; i < N_WALLS; i++) {
+                int col_x = walls[i][0], col_y = walls[i][1];
+                if (map.vis[col_x + col_y * MAP_W]) {
+                        SDL_QueryTexture(textures[1], NULL, NULL, &dst.w,
+                                         &dst.h);
+                        dst.x = screen_x(col_x, col_y) + map_x;
+                        dst.y = screen_y(col_x, col_y) - (dst.h - TILE_HEIGHT);
 
-                };
-                SDL_RenderCopy(renderer, textures[1], NULL, &dst);
+                        if (blocks_fov(col_x, col_y, dst.h)) {
+                                SDL_SetTextureAlphaMod(textures[1], 128);
+                        } else {
+                                SDL_SetTextureAlphaMod(textures[1], 255);
+                                
+                        };
+                        SDL_RenderCopy(renderer, textures[1], NULL, &dst);
+                }
         }
 
         /* Paint a red square for a cursor position */
@@ -288,6 +318,7 @@ int main(int argc, char **argv)
         }
 
         SDL_DestroyTexture(textures[0]);
+        SDL_DestroyTexture(textures[1]);
 destroy_renderer:
         SDL_DestroyRenderer(renderer);
 destroy_window:
