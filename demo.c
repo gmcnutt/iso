@@ -43,12 +43,23 @@ static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
 static fov_map_t map;
-#define N_WALLS 11
+static int wall_height;
+#define N_WALLS 12
 static const int walls[N_WALLS][2] = {
-        {5, 5}, {6, 5},         {8, 5},
+        {5, 5}, {6, 5}, {7, 5}, {8, 5},
         {5, 6},                 {8, 6},
         {5, 7},                 {8, 7},
         {5, 8}, {6, 8}, {7, 8}, {8, 8}
+};
+
+/* XXX: inefficient */
+static int wall_at(int x, int y) {
+        for (int i = 0; i < N_WALLS; i++) {
+                if (walls[i][0] == x && walls[i][1] == y) {
+                        return 1;
+                }
+        }
+        return 0;
 };
 
 /**
@@ -148,9 +159,9 @@ static inline int in_fov(int map_x, int map_y)
 static int blocks_fov(int map_x, int map_y, int img_h)
 {
         while (img_h > TILE_HEIGHT) {
-                if (in_fov(map_x - 1, map_y) ||
-                    in_fov(map_x, map_y - 1) ||
-                    in_fov(map_x - 1, map_y - 1)) {
+                if ((in_fov(map_x - 1, map_y) && !wall_at(map_x - 1, map_y)) ||
+                    (in_fov(map_x, map_y - 1) && !wall_at(map_x, map_y - 1))||
+                    (in_fov(map_x - 1, map_y - 1) && !wall_at(map_x - 1, map_y - 1))) {
                         return 1;
                 }
                 img_h -= TILE_HEIGHT;
@@ -209,6 +220,14 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
                 int col_x = walls[i][0], col_y = walls[i][1];
                 if (map.vis[col_x + col_y * MAP_W]) {
                         for (int j = 0; j < N_WALL_OFFSETS; j++) {
+                                int transparent = blocks_fov(col_x, col_y, wall_height);
+                                if ((j == WALL_LEFT_OFFSET &&
+                                     (wall_at(col_x, col_y + 1) && in_fov(col_x, col_y + 1))) ||
+                                    (j == WALL_RIGHT_OFFSET &&
+                                     (wall_at(col_x + 1, col_y) && in_fov(col_x + 1, col_y)))) {
+                                        continue;
+                                }
+                                
                                 SDL_Texture *texture = textures[j + FIRST_WALL_TEXTURE];
                                 SDL_Rect *offset = &wall_offsets[j];
                                 dst.w = wall_offsets[j].w;
@@ -216,7 +235,7 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
                                 dst.x = screen_x(col_x, col_y) + map_x + offset->x;
                                 dst.y = screen_y(col_x, col_y) - offset->y;
 
-                                if (blocks_fov(col_x, col_y, dst.h)) {
+                                if (transparent) {
                                         SDL_SetTextureAlphaMod(texture, 128);
                                 } else {
                                         SDL_SetTextureAlphaMod(texture, 255);
@@ -319,6 +338,7 @@ int main(int argc, char **argv)
         wall_offsets[WALL_LEFT_OFFSET].y = wall_offsets[WALL_LEFT_OFFSET].h - TILE_HEIGHT;
         wall_offsets[WALL_TOP_OFFSET].y = (wall_offsets[WALL_LEFT_OFFSET].y +
                                            wall_offsets[WALL_TOP_OFFSET].h / 2);
+        wall_height =  wall_offsets[WALL_LEFT_OFFSET].h + wall_offsets[WALL_TOP_OFFSET].h / 2;
         
         /* Setup the fov map. */
         map.w = MAP_W;
