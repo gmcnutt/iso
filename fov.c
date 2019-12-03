@@ -56,7 +56,7 @@ static int mult[4][8] = {
         {1, 0, 0, 1, -1, 0, 0, -1},
 };
 
-static void fov_octant(fov_map_t *map, int cx, int cy, int row,
+static void fov_octant(fov_map_t * map, int cx, int cy, int row,
                        float start, float end, int radius, int r2, int xx,
                        int xy, int yx, int yy, int id)
 {
@@ -97,8 +97,7 @@ static void fov_octant(fov_map_t *map, int cx, int cy, int row,
                                                 start = new_start;
                                         }
                                 } else {
-                                        if (map->opq[offset] &&
-                                            j < radius) {
+                                        if (map->opq[offset] && j < radius) {
                                                 blocked = 1;
                                                 fov_octant(map, cx, cy, j + 1,
                                                            start, l_slope,
@@ -132,7 +131,7 @@ void fov(fov_map_t * map, int origin_x, int origin_y, int max_radius)
                            max_radius_y * max_radius_y)) + 1;
         }
         r2 = max_radius * max_radius;
-        
+
         /* recursive shadow casting */
         for (oct = 0; oct < 8; oct++)
                 fov_octant(map, origin_x, origin_y, 1, 1.0, 0.0, max_radius, r2,

@@ -93,7 +93,7 @@ static void parse_args(int argc, char **argv, struct args *args)
 
 static void clear_screen(SDL_Renderer *renderer)
 {
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+        SDL_SetRenderDrawColor(renderer, 128, 128, 128, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 }
 
@@ -110,7 +110,7 @@ static int screen_y(int map_x, int map_y)
 static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
                             int off_x, int off_y, int map_w, int map_h)
 {
-        int row, col, map_x;
+        int row, col, idx, map_x, col_x = 5, col_y = 5;
         SDL_Rect src, dst;
 
         src.x = 0;
@@ -123,52 +123,52 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
 
         map_x = screen_x(map_h - 1, 0);
 
-        /* Paint the ground */
-        for (row = 0; row < map_h; row++) {
-                for (col = 0; col < map_w; col++) {
-                        dst.x = screen_x(col, row) + map_x;
-                        dst.y = screen_y(col, row);
-                        SDL_RenderCopy(renderer, textures[0], &src, &dst);
+        /* Clear the screen to gray */
+        clear_screen(renderer);
+
+        /* Compute fov */
+        map.opq[col_x + col_y * MAP_W] = 1;
+        fov(&map, cursor_x, cursor_y, FOV_RAD);
+
+        /* Paint the ground in fov */
+        for (row = 0, idx = 0; row < map_h; row++) {
+                for (col = 0; col < map_w; col++, idx++) {
+                        if (map.vis[idx]) {
+                                dst.x = screen_x(col, row) + map_x;
+                                dst.y = screen_y(col, row);
+                                SDL_RenderCopy(
+                                        renderer,
+                                        textures[0],
+                                        &src,
+                                        &dst);
+                        }
                 }
         }
 
         /* Paint the grid */
-        SDL_SetRenderDrawColor(renderer, 0, 255, 255, 128);
+        SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128);
         iso_grid(renderer, map_w, map_h);
 
         /* Paint a column, semi-transparent if the cursor should be able to see
          * beyond it. */
-        row = 5;
-        col = 5;
-        SDL_QueryTexture(textures[1], NULL, NULL, &dst.w, &dst.h);
-        dst.x = screen_x(col, row) + map_x;
-        dst.y = screen_y(col, row) - (dst.h - TILE_HEIGHT);
-        if (row > cursor_y || col > cursor_x) {
-                SDL_SetTextureAlphaMod(textures[1], 128);
-        } else {
-                SDL_SetTextureAlphaMod(textures[1], 255);
+        if (map.vis[col_x + col_y * MAP_W]) {
+                SDL_QueryTexture(textures[1], NULL, NULL, &dst.w, &dst.h);
+                dst.x = screen_x(col_x, col_y) + map_x;
+                dst.y = screen_y(col_x, col_y) - (dst.h - TILE_HEIGHT);
+                if (col_y > cursor_y || col_x > cursor_x) {
+                        SDL_SetTextureAlphaMod(textures[1], 128);
+                } else {
+                        SDL_SetTextureAlphaMod(textures[1], 255);
 
-        };
-        SDL_RenderCopy(renderer, textures[1], NULL, &dst);
-
-        /* Paint fov squares. */
-        SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);
-        map.opq[col + row * MAP_W] = 1;
-        fov(&map, cursor_x, cursor_y, FOV_RAD);
-        for (row = 0; row < map_h; row++) {
-                for (col = 0; col < map_w; col++) {
-                        if (map.vis[col + row * map.w]) {
-                                iso_square(renderer, map_w, map_h, col, row);
-                        }
-                }
+                };
+                SDL_RenderCopy(renderer, textures[1], NULL, &dst);
         }
-        
 
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
         iso_square(renderer, map_w, map_h, cursor_x, cursor_y);
-        
-        
+
+
 }
 
 static void render(SDL_Renderer *renderer, SDL_Texture **textures)
