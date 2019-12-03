@@ -159,9 +159,11 @@ static inline int in_fov(int map_x, int map_y)
 static int blocks_fov(int map_x, int map_y, int img_h)
 {
         while (img_h > TILE_HEIGHT) {
-                if ((in_fov(map_x - 1, map_y) && !wall_at(map_x - 1, map_y)) ||
-                    (in_fov(map_x, map_y - 1) && !wall_at(map_x, map_y - 1))||
-                    (in_fov(map_x - 1, map_y - 1) && !wall_at(map_x - 1, map_y - 1))) {
+                if (
+                        //(in_fov(map_x - 1, map_y) && !wall_at(map_x - 1, map_y)) ||
+                        //(in_fov(map_x, map_y - 1) && !wall_at(map_x, map_y - 1))||
+                        (in_fov(map_x - 1, map_y - 1) && !wall_at(map_x - 1, map_y - 1))
+                        ) {
                         return 1;
                 }
                 img_h -= TILE_HEIGHT;
