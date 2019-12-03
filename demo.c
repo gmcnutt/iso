@@ -11,15 +11,44 @@ struct args {
         char *cmd;
 };
 
+enum texture_indices {
+        GRASS = 0,
+        WALL_LEFT,
+        WALL_RIGHT,
+        WALL_TOP,
+        N_TEXTURES
+};
+
+static const char *texture_files[] = {
+        "grass.png",
+        "wall_left.png",
+        "wall_right.png",
+        "wall_top.png"
+};
+
+/* XXX: harcoded 3 */
+#define FIRST_WALL_TEXTURE WALL_LEFT
+enum wall_offsets {
+        WALL_LEFT_OFFSET,
+        WALL_RIGHT_OFFSET,
+        WALL_TOP_OFFSET,
+        N_WALL_OFFSETS
+};
+static SDL_Rect wall_offsets[N_WALL_OFFSETS] = {0};
+#define N_WALL_TEXTURES N_WALL_OFFSETS
+
 static const int MAP_W = 13;
 static const int MAP_H = 11;
 static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
 static fov_map_t map;
-#define N_WALLS 3
+#define N_WALLS 11
 static const int walls[N_WALLS][2] = {
-        {5, 5}, {6, 5}, {5, 6}
+        {5, 5}, {6, 5},         {8, 5},
+        {5, 6},                 {8, 6},
+        {5, 7},                 {8, 7},
+        {5, 8}, {6, 8}, {7, 8}, {8, 8}
 };
 
 /**
@@ -163,7 +192,7 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
                                 dst.y = screen_y(col, row);
                                 SDL_RenderCopy(
                                         renderer,
-                                        textures[0],
+                                        textures[GRASS],
                                         &src,
                                         &dst);
                         }
@@ -179,18 +208,22 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
         for (int i = 0; i < N_WALLS; i++) {
                 int col_x = walls[i][0], col_y = walls[i][1];
                 if (map.vis[col_x + col_y * MAP_W]) {
-                        SDL_QueryTexture(textures[1], NULL, NULL, &dst.w,
-                                         &dst.h);
-                        dst.x = screen_x(col_x, col_y) + map_x;
-                        dst.y = screen_y(col_x, col_y) - (dst.h - TILE_HEIGHT);
+                        for (int j = 0; j < N_WALL_OFFSETS; j++) {
+                                SDL_Texture *texture = textures[j + FIRST_WALL_TEXTURE];
+                                SDL_Rect *offset = &wall_offsets[j];
+                                dst.w = wall_offsets[j].w;
+                                dst.h = wall_offsets[j].h;
+                                dst.x = screen_x(col_x, col_y) + map_x + offset->x;
+                                dst.y = screen_y(col_x, col_y) - offset->y;
 
-                        if (blocks_fov(col_x, col_y, dst.h)) {
-                                SDL_SetTextureAlphaMod(textures[1], 128);
-                        } else {
-                                SDL_SetTextureAlphaMod(textures[1], 255);
-                                
-                        };
-                        SDL_RenderCopy(renderer, textures[1], NULL, &dst);
+                                if (blocks_fov(col_x, col_y, dst.h)) {
+                                        SDL_SetTextureAlphaMod(texture, 128);
+                                } else {
+                                        SDL_SetTextureAlphaMod(texture, 255);
+                                        
+                                };
+                                SDL_RenderCopy(renderer, texture, NULL, &dst);
+                        }
                 }
         }
 
@@ -233,7 +266,8 @@ int main(int argc, char **argv)
         SDL_Event event;
         SDL_Window *window=NULL;
         SDL_Renderer *renderer=NULL;
-        SDL_Texture *textures[2]={NULL};
+        SDL_Texture *textures[N_TEXTURES] = { 0 };
+
         int done=0;
         Uint32 start_ticks, end_ticks, frames=0;
         struct args args;
@@ -265,20 +299,27 @@ int main(int argc, char **argv)
                 goto destroy_window;
         }
 
-        /* Load the texture image */
-        if (! (textures[0] = load_texture(
-                       renderer,
-                       "grass.png"))) {
-                goto destroy_renderer;
+        /* Load the textures */
+        for (int i = 0; i < N_TEXTURES; i++) {
+                if (! (textures[i] = load_texture(
+                               renderer,
+                               texture_files[i]))) {
+                        goto destroy_textures;
+                }
         }
 
-        /* Load the texture image */
-        if (! (textures[1] = load_texture(
-                       renderer,
-                       "wall.png"))) {
-                goto destroy_renderer;
+        /* Compute the wall face dimensions */
+        for (int i = 0; i < N_WALL_OFFSETS; i++) {
+                SDL_QueryTexture(textures[i + FIRST_WALL_TEXTURE], NULL, NULL,
+                                 &wall_offsets[i].w, &wall_offsets[i].h);
         }
-
+        /* Compute the wall face offsets */
+        wall_offsets[WALL_RIGHT_OFFSET].x = wall_offsets[WALL_LEFT_OFFSET].w;
+        wall_offsets[WALL_RIGHT_OFFSET].y = wall_offsets[WALL_RIGHT_OFFSET].h - TILE_HEIGHT;
+        wall_offsets[WALL_LEFT_OFFSET].y = wall_offsets[WALL_LEFT_OFFSET].h - TILE_HEIGHT;
+        wall_offsets[WALL_TOP_OFFSET].y = (wall_offsets[WALL_LEFT_OFFSET].y +
+                                           wall_offsets[WALL_TOP_OFFSET].h / 2);
+        
         /* Setup the fov map. */
         map.w = MAP_W;
         map.h = MAP_H;
@@ -317,9 +358,15 @@ int main(int argc, char **argv)
                         );
         }
 
-        SDL_DestroyTexture(textures[0]);
-        SDL_DestroyTexture(textures[1]);
-destroy_renderer:
+destroy_textures:
+        for (int i = 0; i < N_TEXTURES; i++) {
+                if (textures[i]) {
+                        SDL_DestroyTexture(textures[i]);
+                } else {
+                        break;
+                }
+        }
+//destroy_renderer:
         SDL_DestroyRenderer(renderer);
 destroy_window:
         SDL_DestroyWindow(window);
