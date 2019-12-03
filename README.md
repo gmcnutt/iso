@@ -13,3 +13,6 @@ git@github.com:gmcnutt/cutils.git.
 
 ## Usage
 
+    ./demo
+
+Use the arrow keys to move the red cursor square around.
