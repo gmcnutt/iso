@@ -47,26 +47,31 @@ static int cursor_x = 0;
 static int cursor_y = 0;
 static fov_map_t map;
 static int wall_height;
-static grid_t *walls = NULL;
+static grid_t *wallmap = NULL;
+
+typedef struct {
+        size_t x, y;
+} wall_t;
+
 #define N_WALLS 12
-static const int wallpos[N_WALLS][2] = {
+static const wall_t walls[N_WALLS] = {
         {5, 5}, {6, 5}, {7, 5}, {8, 5},
         {5, 6}, {8, 6},
         {5, 7}, {8, 7},
         {5, 8}, {6, 8}, {7, 8}, {8, 8}
 };
 
-static void setup_walls()
+static void setup_wallmap()
 {
         char *marker = mem_alloc(1, NULL);      /* marker that a wall is there */
-        walls = grid_alloc(MAP_W, MAP_H);
+        wallmap = grid_alloc(MAP_W, MAP_H);
         for (size_t i = 0; i < N_WALLS; i++) {
-                grid_put(walls, wallpos[i][0], wallpos[i][1], marker);
+                grid_put(wallmap, walls[i].x, walls[i].y, marker);
         }
         mem_deref(marker);      /* grid will keep refs */
 }
 
-#define wall_at(x, y) (grid_has(walls, (x), (y)))
+#define wall_at(x, y) (grid_has(wallmap, (x), (y)))
 
 
 /**
@@ -197,7 +202,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
         /* Compute fov */
         for (int i = 0; i < N_WALLS; i++) {
-                map.opq[wallpos[i][0] + wallpos[i][1] * MAP_W] = 1;
+                map.opq[walls[i].x + walls[i].y * MAP_W] = 1;
         }
 
         fov(&map, cursor_x, cursor_y, FOV_RAD);
@@ -221,7 +226,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         /* Paint a column, semi-transparent if the cursor should be able to see
          * beyond it. */
         for (int i = 0; i < N_WALLS; i++) {
-                int col_x = wallpos[i][0], col_y = wallpos[i][1];
+                int col_x = walls[i].x, col_y = walls[i].y;
                 if (map.vis[col_x + col_y * MAP_W]) {
                         for (int j = 0; j < N_WALL_OFFSETS; j++) {
                                 int transparent =
@@ -353,7 +358,7 @@ int main(int argc, char **argv)
             wall_offsets[WALL_LEFT_OFFSET].h +
             wall_offsets[WALL_TOP_OFFSET].h / 2;
 
-        setup_walls();
+        setup_wallmap();
 
         /* Setup the fov map. */
         map.w = MAP_W;
