@@ -20,7 +20,7 @@ $(program): $(objects)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 clean:
-	rm -f $(program) $(objects)
+	rm -f $(program) $(objects) $(program)
 
 indent: $(sources) $(hdrs) $(testsrc)
 	indent -linux $^
