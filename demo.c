@@ -3,6 +3,8 @@
 #include <getopt.h>
 #include <stdio.h>
 
+#include <gcu.h>
+
 #include "fov.h"
 #include "iso.h"
 
@@ -44,23 +46,27 @@ static int cursor_x = 0;
 static int cursor_y = 0;
 static fov_map_t map;
 static int wall_height;
+static grid_t *walls = NULL;
 #define N_WALLS 12
-static const int walls[N_WALLS][2] = {
+static const int wallpos[N_WALLS][2] = {
         {5, 5}, {6, 5}, {7, 5}, {8, 5},
         {5, 6},                 {8, 6},
         {5, 7},                 {8, 7},
         {5, 8}, {6, 8}, {7, 8}, {8, 8}
 };
 
-/* XXX: inefficient */
-static int wall_at(int x, int y) {
-        for (int i = 0; i < N_WALLS; i++) {
-                if (walls[i][0] == x && walls[i][1] == y) {
-                        return 1;
-                }
+static void setup_walls()
+{
+        char * marker = mem_alloc(1, NULL); /* marker that a wall is there */
+        walls = grid_alloc(MAP_W, MAP_H);
+        for (size_t i = 0; i < N_WALLS; i++) {
+                grid_put(walls, wallpos[i][0], wallpos[i][1], marker);
         }
-        return 0;
-};
+        mem_deref(marker); /* grid will keep refs */
+}
+
+#define wall_at(x, y) (grid_has(walls, (x), (y)))
+
 
 /**
  * Handle key presses.
@@ -192,7 +198,7 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
 
         /* Compute fov */
         for (int i = 0; i < N_WALLS; i++) {
-                map.opq[walls[i][0] + walls[i][1] * MAP_W] = 1;
+                map.opq[wallpos[i][0] + wallpos[i][1] * MAP_W] = 1;
         }
 
         fov(&map, cursor_x, cursor_y, FOV_RAD);
@@ -219,7 +225,7 @@ static void render_iso_test(SDL_Renderer *renderer, SDL_Texture **textures,
         /* Paint a column, semi-transparent if the cursor should be able to see
          * beyond it. */
         for (int i = 0; i < N_WALLS; i++) {
-                int col_x = walls[i][0], col_y = walls[i][1];
+                int col_x = wallpos[i][0], col_y = wallpos[i][1];
                 if (map.vis[col_x + col_y * MAP_W]) {
                         for (int j = 0; j < N_WALL_OFFSETS; j++) {
                                 int transparent = blocks_fov(col_x, col_y, wall_height);
@@ -334,6 +340,7 @@ int main(int argc, char **argv)
                 SDL_QueryTexture(textures[i + FIRST_WALL_TEXTURE], NULL, NULL,
                                  &wall_offsets[i].w, &wall_offsets[i].h);
         }
+        
         /* Compute the wall face offsets */
         wall_offsets[WALL_RIGHT_OFFSET].x = wall_offsets[WALL_LEFT_OFFSET].w;
         wall_offsets[WALL_RIGHT_OFFSET].y = wall_offsets[WALL_RIGHT_OFFSET].h - TILE_HEIGHT;
@@ -341,6 +348,8 @@ int main(int argc, char **argv)
         wall_offsets[WALL_TOP_OFFSET].y = (wall_offsets[WALL_LEFT_OFFSET].y +
                                            wall_offsets[WALL_TOP_OFFSET].h / 2);
         wall_height =  wall_offsets[WALL_LEFT_OFFSET].h + wall_offsets[WALL_TOP_OFFSET].h / 2;
+
+        setup_walls();
         
         /* Setup the fov map. */
         map.w = MAP_W;
