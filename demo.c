@@ -8,6 +8,11 @@
 #include "fov.h"
 #include "iso.h"
 
+#define TILE_WIDTH 36
+#define TILE_HEIGHT 18
+#define TILE_WIDTH_HALF (TILE_WIDTH / 2)
+#define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
+
 struct args {
         char *filename;
         char *cmd;
@@ -21,6 +26,8 @@ enum texture_indices {
         N_TEXTURES
 };
 
+#define FIRST_WALL_TEXTURE WALL_LEFT
+
 static const char *texture_files[] = {
         "grass.png",
         "wall_left.png",
@@ -28,17 +35,50 @@ static const char *texture_files[] = {
         "wall_top.png"
 };
 
-/* XXX: harcoded 3 */
-#define FIRST_WALL_TEXTURE WALL_LEFT
+/* A 3-faced isometric model. Textures are ordered left, right and top. */
 enum wall_offsets {
         WALL_LEFT_OFFSET,
         WALL_RIGHT_OFFSET,
         WALL_TOP_OFFSET,
-        N_WALL_OFFSETS
+        N_MODEL_FACES
 };
-static SDL_Rect wall_offsets[N_WALL_OFFSETS] = { 0 };
+typedef struct {
+        SDL_Texture *textures[N_MODEL_FACES];
+        SDL_Rect offsets[N_MODEL_FACES];        /* Shift textures from the default
+                                                 * position where the tile would
+                                                 * normally be placed */
+        size_t height;          /* total height in pixels */
+} model_t;
 
-#define N_WALL_TEXTURES N_WALL_OFFSETS
+static model_t wall_model = { 0 };
+
+/**
+ * XXX: this could be done as a preprocessing step that generates a header
+ * file with static declarations of all the model data.
+ */
+static void setup_model(model_t * model, SDL_Texture ** textures)
+{
+        /* Store the textures and their sizes. */
+        for (size_t i = 0; i < N_MODEL_FACES; i++) {
+                model->textures[i] = textures[i];
+                SDL_QueryTexture(textures[i], NULL, NULL, &model->offsets[i].w,
+                                 &model->offsets[i].h);
+        }
+
+        model->offsets[WALL_RIGHT_OFFSET].x =
+            model->offsets[WALL_LEFT_OFFSET].w;
+        model->offsets[WALL_RIGHT_OFFSET].y =
+            model->offsets[WALL_RIGHT_OFFSET].h - TILE_HEIGHT;
+        model->offsets[WALL_LEFT_OFFSET].y =
+            model->offsets[WALL_LEFT_OFFSET].h - TILE_HEIGHT;
+        model->offsets[WALL_TOP_OFFSET].y =
+            (model->offsets[WALL_LEFT_OFFSET].y +
+             model->offsets[WALL_TOP_OFFSET].h / 2);
+        model->height =
+            model->offsets[WALL_LEFT_OFFSET].h +
+            model->offsets[WALL_TOP_OFFSET].h / 2;
+
+}
 
 static const int MAP_W = 13;
 static const int MAP_H = 11;
@@ -46,7 +86,7 @@ static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
 static fov_map_t map;
-static int wall_height;
+//static int wall_height;
 static grid_t *wallmap = NULL;
 
 typedef struct {
@@ -139,10 +179,6 @@ static void parse_args(int argc, char **argv, struct args *args)
 }
 
 
-#define TILE_WIDTH 36
-#define TILE_HEIGHT 18
-#define TILE_WIDTH_HALF (TILE_WIDTH / 2)
-#define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 
 static void clear_screen(SDL_Renderer * renderer)
 {
@@ -228,9 +264,9 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         for (int i = 0; i < N_WALLS; i++) {
                 int col_x = walls[i].x, col_y = walls[i].y;
                 if (map.vis[col_x + col_y * MAP_W]) {
-                        for (int j = 0; j < N_WALL_OFFSETS; j++) {
+                        for (int j = 0; j < N_MODEL_FACES; j++) {
                                 int transparent =
-                                    blocks_fov(col_x, col_y, wall_height);
+                                    blocks_fov(col_x, col_y, wall_model.height);
                                 if ((j == WALL_LEFT_OFFSET &&
                                      (wall_at(col_x, col_y + 1) &&
                                       in_fov(col_x, col_y + 1))) ||
@@ -242,9 +278,9 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
                                 SDL_Texture *texture =
                                     textures[j + FIRST_WALL_TEXTURE];
-                                SDL_Rect *offset = &wall_offsets[j];
-                                dst.w = wall_offsets[j].w;
-                                dst.h = wall_offsets[j].h;
+                                SDL_Rect *offset = &wall_model.offsets[j];
+                                dst.w = wall_model.offsets[j].w;
+                                dst.h = wall_model.offsets[j].h;
                                 dst.x =
                                     screen_x(col_x, col_y) + map_x + offset->x;
                                 dst.y = screen_y(col_x, col_y) - offset->y;
@@ -339,25 +375,7 @@ int main(int argc, char **argv)
                 }
         }
 
-        /* Compute the wall face dimensions */
-        for (int i = 0; i < N_WALL_OFFSETS; i++) {
-                SDL_QueryTexture(textures[i + FIRST_WALL_TEXTURE], NULL, NULL,
-                                 &wall_offsets[i].w, &wall_offsets[i].h);
-        }
-
-        /* Compute the wall face offsets */
-        wall_offsets[WALL_RIGHT_OFFSET].x = wall_offsets[WALL_LEFT_OFFSET].w;
-        wall_offsets[WALL_RIGHT_OFFSET].y =
-            wall_offsets[WALL_RIGHT_OFFSET].h - TILE_HEIGHT;
-        wall_offsets[WALL_LEFT_OFFSET].y =
-            wall_offsets[WALL_LEFT_OFFSET].h - TILE_HEIGHT;
-        wall_offsets[WALL_TOP_OFFSET].y =
-            (wall_offsets[WALL_LEFT_OFFSET].y +
-             wall_offsets[WALL_TOP_OFFSET].h / 2);
-        wall_height =
-            wall_offsets[WALL_LEFT_OFFSET].h +
-            wall_offsets[WALL_TOP_OFFSET].h / 2;
-
+        setup_model(&wall_model, &textures[FIRST_WALL_TEXTURE]);
         setup_wallmap();
 
         /* Setup the fov map. */
