@@ -37,9 +37,9 @@ static const char *texture_files[] = {
 
 /* A 3-faced isometric model. Textures are ordered left, right and top. */
 enum wall_offsets {
-        WALL_LEFT_OFFSET,
-        WALL_RIGHT_OFFSET,
-        WALL_TOP_OFFSET,
+        MODEL_FACE_LEFT,
+        MODEL_FACE_RIGHT,
+        MODEL_FACE_TOP,
         N_MODEL_FACES
 };
 typedef struct {
@@ -65,18 +65,18 @@ static void setup_model(model_t * model, SDL_Texture ** textures)
                                  &model->offsets[i].h);
         }
 
-        model->offsets[WALL_RIGHT_OFFSET].x =
-            model->offsets[WALL_LEFT_OFFSET].w;
-        model->offsets[WALL_RIGHT_OFFSET].y =
-            model->offsets[WALL_RIGHT_OFFSET].h - TILE_HEIGHT;
-        model->offsets[WALL_LEFT_OFFSET].y =
-            model->offsets[WALL_LEFT_OFFSET].h - TILE_HEIGHT;
-        model->offsets[WALL_TOP_OFFSET].y =
-            (model->offsets[WALL_LEFT_OFFSET].y +
-             model->offsets[WALL_TOP_OFFSET].h / 2);
+        model->offsets[MODEL_FACE_RIGHT].x =
+            model->offsets[MODEL_FACE_LEFT].w;
+        model->offsets[MODEL_FACE_RIGHT].y =
+            model->offsets[MODEL_FACE_RIGHT].h - TILE_HEIGHT;
+        model->offsets[MODEL_FACE_LEFT].y =
+            model->offsets[MODEL_FACE_LEFT].h - TILE_HEIGHT;
+        model->offsets[MODEL_FACE_TOP].y =
+            (model->offsets[MODEL_FACE_LEFT].y +
+             model->offsets[MODEL_FACE_TOP].h / 2);
         model->height =
-            model->offsets[WALL_LEFT_OFFSET].h +
-            model->offsets[WALL_TOP_OFFSET].h / 2;
+            model->offsets[MODEL_FACE_LEFT].h +
+            model->offsets[MODEL_FACE_TOP].h / 2;
 
 }
 
@@ -267,10 +267,10 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                         for (int j = 0; j < N_MODEL_FACES; j++) {
                                 int transparent =
                                     blocks_fov(col_x, col_y, wall_model.height);
-                                if ((j == WALL_LEFT_OFFSET &&
+                                if ((j == MODEL_FACE_LEFT &&
                                      (wall_at(col_x, col_y + 1) &&
                                       in_fov(col_x, col_y + 1))) ||
-                                    (j == WALL_RIGHT_OFFSET &&
+                                    (j == MODEL_FACE_RIGHT &&
                                      (wall_at(col_x + 1, col_y) &&
                                       in_fov(col_x + 1, col_y)))) {
                                         continue;
