@@ -9,24 +9,25 @@
 /**
  * Blit a texture to an iso grid.
  */
-void iso_blit(SDL_Renderer *renderer, SDL_Texture *texture, SDL_Rect *srcrect,
-              int map_x, int map_y);
+void iso_blit(SDL_Renderer * renderer, SDL_Texture * texture,
+              SDL_Rect * srcrect, int map_x, int map_y);
 
 /**
  * Fill an iso grid with a texture.
  */
-void iso_fill(SDL_Renderer *renderer, SDL_Texture *texture, SDL_Rect *srcrect,
-              int map_w, int map_h);
+void iso_fill(SDL_Renderer * renderer, SDL_Texture * texture,
+              SDL_Rect * srcrect, int map_w, int map_h);
 
 /**
  * Render an isometric square around the map location.
  */
-void iso_square(SDL_Renderer *renderer, int map_w, int map_h, int map_x, int map_y);
+void iso_square(SDL_Renderer * renderer, int map_w, int map_h, int map_x,
+                int map_y);
 
 /**
  * Render isometric grid lines.
  */
-void iso_grid(SDL_Renderer *renderer, int map_w, int map_h);
+void iso_grid(SDL_Renderer * renderer, int map_w, int map_h);
 
 /**
  * Convert screen coordinates back to map coordinates. Returns -1 if

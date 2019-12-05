@@ -3,8 +3,8 @@
 
 typedef struct {
         int w, h;
-        char *opq;  /* opacity set by caller; 0 is transparent */
-        char *vis;  /* visibility set by fov() */
+        char *opq;              /* opacity set by caller; 0 is transparent */
+        char *vis;              /* visibility set by fov() */
 } fov_map_t;
 
 /**

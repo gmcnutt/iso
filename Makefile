@@ -12,6 +12,8 @@ ifeq ($(OPTIMIZE), true)
 	CFLAGS += -O3
 endif
 
+.PHONY: clean indent
+
 all: $(program)
 
 $(program): $(objects)
@@ -19,3 +21,7 @@ $(program): $(objects)
 
 clean:
 	rm -f $(program) $(objects)
+
+indent: $(sources) $(hdrs) $(testsrc)
+	indent -linux $^
+	sed -i 's/[ \t]*$$//' $^

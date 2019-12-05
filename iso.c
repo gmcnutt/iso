@@ -28,10 +28,10 @@ static inline int map_to_screen_y(int map_x, int map_y)
 static inline int screen_to_map_x(int screen_x, int screen_y)
 {
         /* XXX: consider using integer-only.  XXX: these factors are common
-           with screen_to_map_y, so they only need to be computed once. With
-           optimizations enabled the compiler might be smart enough to figure
-           that out since these are declared inline.
-        */
+         * with screen_to_map_y, so they only need to be computed once. With
+         * optimizations enabled the compiler might be smart enough to figure
+         * that out since these are declared inline.
+         */
         return (int)((float)screen_x / (float)TILE_WIDTH +
                      (float)screen_y / (float)TILE_HEIGHT);
 }
@@ -42,8 +42,8 @@ static inline int screen_to_map_y(int screen_x, int screen_y)
                      (float)screen_x / (float)TILE_WIDTH);
 }
 
-void iso_blit(SDL_Renderer *renderer, SDL_Texture *texture, SDL_Rect *srcrect,
-              int map_x, int map_y)
+void iso_blit(SDL_Renderer * renderer, SDL_Texture * texture,
+              SDL_Rect * srcrect, int map_x, int map_y)
 {
         SDL_Rect screen_dst;
 
@@ -58,8 +58,8 @@ void iso_blit(SDL_Renderer *renderer, SDL_Texture *texture, SDL_Rect *srcrect,
 }
 
 
-void iso_fill(SDL_Renderer *renderer, SDL_Texture *texture, SDL_Rect *srcrect,
-              int map_w, int map_h)
+void iso_fill(SDL_Renderer * renderer, SDL_Texture * texture,
+              SDL_Rect * srcrect, int map_w, int map_h)
 {
         SDL_Rect screen_dst;
         int row, col, off_x;
@@ -73,45 +73,48 @@ void iso_fill(SDL_Renderer *renderer, SDL_Texture *texture, SDL_Rect *srcrect,
                 for (col = 0; col < map_w; col++) {
                         screen_dst.x = map_to_screen_x(col, row) + off_x;
                         screen_dst.y = map_to_screen_y(col, row);
-                        SDL_RenderCopy(renderer, texture, srcrect
-                                       , &screen_dst);
+                        SDL_RenderCopy(renderer, texture, srcrect, &screen_dst);
                 }
         }
 }
 
 
-void iso_grid(SDL_Renderer *renderer, int map_w, int map_h)
+void iso_grid(SDL_Renderer * renderer, int map_w, int map_h)
 {
         int row, col, offx;
 
         offx = map_to_screen_x(map_h, 0);
         for (row = 0; row <= map_h; row++) {
-                SDL_RenderDrawLine(
-                        renderer,
-                        offx + map_to_screen_x(0, row),
-                        map_to_screen_y(0, row),
-                        offx + map_to_screen_x(map_w, row),
-                        map_to_screen_y(map_w, row));
+                SDL_RenderDrawLine(renderer,
+                                   offx + map_to_screen_x(0, row),
+                                   map_to_screen_y(0, row),
+                                   offx + map_to_screen_x(map_w, row),
+                                   map_to_screen_y(map_w, row));
         }
         for (col = 0; col <= map_w; col++) {
-                SDL_RenderDrawLine(
-                        renderer,
-                        offx + map_to_screen_x(col, 0),
-                        map_to_screen_y(col, 0),
-                        offx + map_to_screen_x(col, map_h),
-                        map_to_screen_y(col, map_h));
+                SDL_RenderDrawLine(renderer,
+                                   offx + map_to_screen_x(col, 0),
+                                   map_to_screen_y(col, 0),
+                                   offx + map_to_screen_x(col, map_h),
+                                   map_to_screen_y(col, map_h));
         }
 }
 
-void iso_square(SDL_Renderer *renderer, int map_w, int map_h, int map_x, int map_y)
+void iso_square(SDL_Renderer * renderer, int map_w, int map_h, int map_x,
+                int map_y)
 {
         int off_x = map_to_screen_x(map_h, 0);
         SDL_Point points[5] = {
-                {off_x + map_to_screen_x(map_x, map_y), map_to_screen_y(map_x, map_y)},
-                {off_x + map_to_screen_x(map_x + 1, map_y), map_to_screen_y(map_x + 1, map_y)},
-                {off_x + map_to_screen_x(map_x + 1, map_y + 1), map_to_screen_y(map_x + 1, map_y + 1)},
-                {off_x + map_to_screen_x(map_x, map_y + 1), map_to_screen_y(map_x, map_y + 1)},
-                {off_x + map_to_screen_x(map_x, map_y), map_to_screen_y(map_x, map_y)},
+                {off_x + map_to_screen_x(map_x, map_y),
+                 map_to_screen_y(map_x, map_y)},
+                {off_x + map_to_screen_x(map_x + 1, map_y),
+                 map_to_screen_y(map_x + 1, map_y)},
+                {off_x + map_to_screen_x(map_x + 1, map_y + 1),
+                 map_to_screen_y(map_x + 1, map_y + 1)},
+                {off_x + map_to_screen_x(map_x, map_y + 1),
+                 map_to_screen_y(map_x, map_y + 1)},
+                {off_x + map_to_screen_x(map_x, map_y),
+                 map_to_screen_y(map_x, map_y)},
         };
         SDL_RenderDrawLines(renderer, points, 5);
 }
