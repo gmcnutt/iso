@@ -287,7 +287,26 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                        &src, &dst);
                                         break;
                                 case PIXEL_VALUE_WALL:
+                                        /* Don't render walls where the
+                                         * camera and the player can't
+                                         * see at least one face in
+                                         * common. */
+                                        if (col > cursor_x && row > cursor_y) {
+                                                SDL_SetRenderDrawColor(renderer,
+                                                                       255, 255,
+                                                                       0,
+                                                                       SDL_ALPHA_OPAQUE);
+                                                iso_square(renderer, map_w,
+                                                           map_h, col, row);
+                                                continue;
+                                        }
+
                                         for (int j = 0; j < N_MODEL_FACES; j++) {
+                                                /* Don't render overlapping
+                                                 * vertical faces, it looks
+                                                 * weird when transparency
+                                                 * applies and is wasted cpu
+                                                 * when it doesn't. */
                                                 if ((j == MODEL_FACE_LEFT &&
                                                      (wall_at(col, row + 1) &&
                                                       in_fov(col, row + 1))) ||
@@ -314,11 +333,10 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
                                                 int transparent =
                                                     blocks_fov(col, row,
-                                                               wall_model.
-                                                               height);
+                                                               wall_model.height);
                                                 if (transparent) {
                                                         SDL_SetTextureAlphaMod
-                                                            (texture, 32);
+                                                            (texture, 128);
                                                 } else {
                                                         SDL_SetTextureAlphaMod
                                                             (texture, 255);
@@ -340,8 +358,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         }
 
         /* Paint the grid */
-        SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128);
-        iso_grid(renderer, map_w, map_h);
+        /* SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128); */
+        /* iso_grid(renderer, map_w, map_h); */
 
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
@@ -422,7 +440,9 @@ int main(int argc, char **argv)
 
         setup_model(&wall_model, &textures[FIRST_WALL_TEXTURE]);
 
-        if (!(map_surface = get_map_surface(args.filename ? args.filename : "map.png"))) {
+        if (!
+            (map_surface =
+             get_map_surface(args.filename ? args.filename : "map.png"))) {
                 goto destroy_textures;
         }
 
