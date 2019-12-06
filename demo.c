@@ -8,40 +8,33 @@
 #include "fov.h"
 #include "iso.h"
 
-#define TILE_WIDTH 36
-#define TILE_HEIGHT 18
-#define TILE_WIDTH_HALF (TILE_WIDTH / 2)
-#define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
-
-struct args {
-        char *filename;
-        char *cmd;
-};
+typedef uint32_t pixel_t;
 
 enum texture_indices {
-        GRASS = 0,
-        WALL_LEFT,
-        WALL_RIGHT,
-        WALL_TOP,
+        GRASS_TEXTURE = 0,
+        WALL_LEFT_TEXTURE,
+        WALL_RIGHT_TEXTURE,
+        WALL_TOP_TEXTURE,
         N_TEXTURES
 };
 
-#define FIRST_WALL_TEXTURE WALL_LEFT
-
-static const char *texture_files[] = {
-        "grass.png",
-        "wall_left.png",
-        "wall_right.png",
-        "wall_top.png"
-};
-
-/* A 3-faced isometric model. Textures are ordered left, right and top. */
 enum wall_offsets {
         MODEL_FACE_LEFT,
         MODEL_FACE_RIGHT,
         MODEL_FACE_TOP,
         N_MODEL_FACES
 };
+
+enum pixel_values {
+        PIXEL_VALUE_GRASS = 0x00ff00ff,
+        PIXEL_VALUE_WALL = 0xffffffff
+};
+
+struct args {
+        char *filename;
+        char *cmd;
+};
+
 typedef struct {
         SDL_Texture *textures[N_MODEL_FACES];
         SDL_Rect offsets[N_MODEL_FACES];        /* Shift textures from the default
@@ -50,6 +43,31 @@ typedef struct {
         size_t height;          /* total height in pixels */
 } model_t;
 
+
+#define FIRST_WALL_TEXTURE WALL_LEFT_TEXTURE
+#define MAP_H (map_surface->h)
+#define MAP_W (map_surface->w)
+#define TILE_HEIGHT 18
+#define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
+#define TILE_WIDTH 36
+#define TILE_WIDTH_HALF (TILE_WIDTH / 2)
+
+#define wall_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL)
+
+
+static const char *texture_files[] = {
+        "grass.png",
+        "wall_left.png",
+        "wall_right.png",
+        "wall_top.png",
+        "map.png"
+};
+
+static SDL_Surface *map_surface = NULL; /* the map image */
+static fov_map_t map;
+static const int FOV_RAD = 32;
+static int cursor_x = 0;
+static int cursor_y = 0;
 static model_t wall_model = { 0 };
 
 /**
@@ -65,8 +83,7 @@ static void setup_model(model_t * model, SDL_Texture ** textures)
                                  &model->offsets[i].h);
         }
 
-        model->offsets[MODEL_FACE_RIGHT].x =
-            model->offsets[MODEL_FACE_LEFT].w;
+        model->offsets[MODEL_FACE_RIGHT].x = model->offsets[MODEL_FACE_LEFT].w;
         model->offsets[MODEL_FACE_RIGHT].y =
             model->offsets[MODEL_FACE_RIGHT].h - TILE_HEIGHT;
         model->offsets[MODEL_FACE_LEFT].y =
@@ -80,38 +97,59 @@ static void setup_model(model_t * model, SDL_Texture ** textures)
 
 }
 
-static const int MAP_W = 13;
-static const int MAP_H = 11;
-static const int FOV_RAD = 32;
-static int cursor_x = 0;
-static int cursor_y = 0;
-static fov_map_t map;
-//static int wall_height;
-static grid_t *wallmap = NULL;
 
-typedef struct {
-        size_t x, y;
-} wall_t;
-
-#define N_WALLS 12
-static const wall_t walls[N_WALLS] = {
-        {5, 5}, {6, 5}, {7, 5}, {8, 5},
-        {5, 6}, {8, 6},
-        {5, 7}, {8, 7},
-        {5, 8}, {6, 8}, {7, 8}, {8, 8}
-};
-
-static void setup_wallmap()
+static inline pixel_t get_pixel(size_t x, size_t y)
 {
-        char *marker = mem_alloc(1, NULL);      /* marker that a wall is there */
-        wallmap = grid_alloc(MAP_W, MAP_H);
-        for (size_t i = 0; i < N_WALLS; i++) {
-                grid_put(wallmap, walls[i].x, walls[i].y, marker);
-        }
-        mem_deref(marker);      /* grid will keep refs */
+        /* The pitch is the length of a row of pixels in bytes. Find the first
+         * byte of the desired pixel then cast it to an RGBA 32 bit value to
+         * check it. */
+        size_t offset = (y * map_surface->pitch + x * sizeof (pixel_t));
+        uint8_t *byteptr = (uint8_t *) map_surface->pixels;
+        byteptr += offset;
+        uint32_t *pixelptr = (uint32_t *) byteptr;
+        return *pixelptr;
 }
 
-#define wall_at(x, y) (grid_has(wallmap, (x), (y)))
+
+static SDL_Surface *get_map_surface(const char *filename)
+{
+        SDL_Surface *surface;
+
+        /* Load the image file that has the map */
+        if (!(surface = IMG_Load(filename))) {
+                printf("%s:IMG_Load:%s\n", __FUNCTION__, SDL_GetError());
+                return NULL;
+        }
+
+        /* Make sure the pixels are in RGBA format, 8 bits per pixel */
+        if (surface->format->format != SDL_PIXELFORMAT_RGBA8888) {
+                SDL_Surface *tmp;
+                tmp =
+                    SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888,
+                                             0);
+                SDL_FreeSurface(surface);
+                surface = tmp;
+                if (!surface) {
+                        printf("%s:SDL_ConvertSurfaceFormat:%s\n", __FUNCTION__,
+                               SDL_GetError());
+                        return NULL;
+                }
+        }
+
+        return surface;
+}
+
+static void setup_fov()
+{
+        for (size_t y = 0, index = 0; y < MAP_H; y++) {
+                for (size_t x = 0; x < MAP_W; x++, index++) {
+                        if (wall_at(x, y)) {
+                                map.opq[index] = 1;
+                        }
+                }
+        }
+
+}
 
 
 /**
@@ -178,20 +216,18 @@ static void parse_args(int argc, char **argv, struct args *args)
 
 }
 
-
-
 static void clear_screen(SDL_Renderer * renderer)
 {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 }
 
-static int screen_x(int map_x, int map_y)
+static inline int screen_x(int map_x, int map_y)
 {
         return (map_x - map_y) * TILE_WIDTH_HALF;
 }
 
-static int screen_y(int map_x, int map_y)
+static inline int screen_y(int map_x, int map_y)
 {
         return (map_x + map_y) * TILE_HEIGHT_HALF;
 }
@@ -204,12 +240,8 @@ static inline int in_fov(int map_x, int map_y)
 static int blocks_fov(int map_x, int map_y, int img_h)
 {
         while (img_h > TILE_HEIGHT) {
-                if (
-                           //(in_fov(map_x - 1, map_y) && !wall_at(map_x - 1, map_y)) ||
-                           //(in_fov(map_x, map_y - 1) && !wall_at(map_x, map_y - 1))||
-                           (in_fov(map_x - 1, map_y - 1) &&
-                            !wall_at(map_x - 1, map_y - 1))
-                    ) {
+                if ((in_fov(map_x - 1, map_y - 1) &&
+                     !wall_at(map_x - 1, map_y - 1))) {
                         return 1;
                 }
                 img_h -= TILE_HEIGHT;
@@ -220,7 +252,7 @@ static int blocks_fov(int map_x, int map_y, int img_h)
 static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                             int off_x, int off_y, int map_w, int map_h)
 {
-        int row, col, idx, map_x;
+        size_t row, col, idx, map_x;
         SDL_Rect src, dst;
 
         src.x = 0;
@@ -233,24 +265,74 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
         map_x = screen_x(map_h - 1, 0);
 
+        /* Recompute fov based on player's position */
+        fov(&map, cursor_x, cursor_y, FOV_RAD);
+
         /* Clear the screen to gray */
         clear_screen(renderer);
 
-        /* Compute fov */
-        for (int i = 0; i < N_WALLS; i++) {
-                map.opq[walls[i].x + walls[i].y * MAP_W] = 1;
-        }
-
-        fov(&map, cursor_x, cursor_y, FOV_RAD);
-
-        /* Paint the ground in fov */
+        /* Render the map as a tiled view */
         for (row = 0, idx = 0; row < map_h; row++) {
                 for (col = 0; col < map_w; col++, idx++) {
                         if (map.vis[idx]) {
-                                dst.x = screen_x(col, row) + map_x;
-                                dst.y = screen_y(col, row);
-                                SDL_RenderCopy(renderer,
-                                               textures[GRASS], &src, &dst);
+                                pixel_t pixel = get_pixel(row, col);
+                                switch (pixel) {
+                                case PIXEL_VALUE_GRASS:
+                                        dst.x = screen_x(col, row) + map_x;
+                                        dst.y = screen_y(col, row);
+                                        SDL_RenderCopy(renderer,
+                                                       textures[GRASS_TEXTURE],
+                                                       &src, &dst);
+                                        break;
+                                case PIXEL_VALUE_WALL:
+                                        for (int j = 0; j < N_MODEL_FACES; j++) {
+                                                if ((j == MODEL_FACE_LEFT &&
+                                                     (wall_at(col, row + 1) &&
+                                                      in_fov(col, row + 1))) ||
+                                                    (j == MODEL_FACE_RIGHT &&
+                                                     (wall_at(col + 1, row) &&
+                                                      in_fov(col + 1, row)))) {
+                                                        continue;
+                                                }
+
+                                                SDL_Texture *texture =
+                                                    textures[j +
+                                                             FIRST_WALL_TEXTURE];
+                                                SDL_Rect *offset =
+                                                    &wall_model.offsets[j];
+                                                dst.w = wall_model.offsets[j].w;
+                                                dst.h = wall_model.offsets[j].h;
+                                                dst.x =
+                                                    screen_x(col,
+                                                             row) + map_x +
+                                                    offset->x;
+                                                dst.y =
+                                                    screen_y(col,
+                                                             row) - offset->y;
+
+                                                int transparent =
+                                                    blocks_fov(col, row,
+                                                               wall_model.
+                                                               height);
+                                                if (transparent) {
+                                                        SDL_SetTextureAlphaMod
+                                                            (texture, 128);
+                                                } else {
+                                                        SDL_SetTextureAlphaMod
+                                                            (texture, 255);
+                                                };
+
+                                                SDL_RenderCopy(renderer,
+                                                               texture, NULL,
+                                                               &dst);
+                                        }
+                                        break;
+                                default:
+                                        printf
+                                            ("Unknown pixel value: 0x%08x at (%ld, %ld)\n",
+                                             pixel, col, row);
+                                        break;
+                                }
                         }
                 }
         }
@@ -259,48 +341,9 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128);
         iso_grid(renderer, map_w, map_h);
 
-        /* Paint a column, semi-transparent if the cursor should be able to see
-         * beyond it. */
-        for (int i = 0; i < N_WALLS; i++) {
-                int col_x = walls[i].x, col_y = walls[i].y;
-                if (map.vis[col_x + col_y * MAP_W]) {
-                        for (int j = 0; j < N_MODEL_FACES; j++) {
-                                int transparent =
-                                    blocks_fov(col_x, col_y, wall_model.height);
-                                if ((j == MODEL_FACE_LEFT &&
-                                     (wall_at(col_x, col_y + 1) &&
-                                      in_fov(col_x, col_y + 1))) ||
-                                    (j == MODEL_FACE_RIGHT &&
-                                     (wall_at(col_x + 1, col_y) &&
-                                      in_fov(col_x + 1, col_y)))) {
-                                        continue;
-                                }
-
-                                SDL_Texture *texture =
-                                    textures[j + FIRST_WALL_TEXTURE];
-                                SDL_Rect *offset = &wall_model.offsets[j];
-                                dst.w = wall_model.offsets[j].w;
-                                dst.h = wall_model.offsets[j].h;
-                                dst.x =
-                                    screen_x(col_x, col_y) + map_x + offset->x;
-                                dst.y = screen_y(col_x, col_y) - offset->y;
-
-                                if (transparent) {
-                                        SDL_SetTextureAlphaMod(texture, 128);
-                                } else {
-                                        SDL_SetTextureAlphaMod(texture, 255);
-
-                                };
-                                SDL_RenderCopy(renderer, texture, NULL, &dst);
-                        }
-                }
-        }
-
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
         iso_square(renderer, map_w, map_h, cursor_x, cursor_y);
-
-
 }
 
 static void render(SDL_Renderer * renderer, SDL_Texture ** textures)
@@ -376,13 +419,17 @@ int main(int argc, char **argv)
         }
 
         setup_model(&wall_model, &textures[FIRST_WALL_TEXTURE]);
-        setup_wallmap();
+
+        if (!(map_surface = get_map_surface("map.png"))) {
+                goto destroy_textures;
+        }
 
         /* Setup the fov map. */
         map.w = MAP_W;
         map.h = MAP_H;
         map.opq = calloc(1, map.w * map.h);
         map.vis = calloc(1, map.w * map.h);
+        setup_fov();
 
         start_ticks = SDL_GetTicks();
 
@@ -415,6 +462,7 @@ int main(int argc, char **argv)
                        ((double)frames * 1000) / (end_ticks - start_ticks)
                     );
         }
+        SDL_FreeSurface(map_surface);
 
 destroy_textures:
         for (int i = 0; i < N_TEXTURES; i++) {
