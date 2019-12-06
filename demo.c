@@ -51,6 +51,8 @@ typedef struct {
 #define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 #define TILE_WIDTH 36
 #define TILE_WIDTH_HALF (TILE_WIDTH / 2)
+#define FPS 60
+#define TICK_PER_FRAME (1000 / FPS)
 
 #define wall_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL)
 
@@ -316,7 +318,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                                height);
                                                 if (transparent) {
                                                         SDL_SetTextureAlphaMod
-                                                            (texture, 128);
+                                                            (texture, 32);
                                                 } else {
                                                         SDL_SetTextureAlphaMod
                                                             (texture, 255);
@@ -381,7 +383,7 @@ int main(int argc, char **argv)
         SDL_Texture *textures[N_TEXTURES] = { 0 };
 
         int done = 0;
-        Uint32 start_ticks, end_ticks, frames = 0;
+        Uint32 start_ticks, end_ticks, frames = 0, pre_tick, post_tick = 0;
         struct args args;
 
 
@@ -432,9 +434,9 @@ int main(int argc, char **argv)
         setup_fov();
 
         start_ticks = SDL_GetTicks();
+        pre_tick = SDL_GetTicks();
 
         while (!done) {
-                frames++;
                 while (SDL_PollEvent(&event)) {
                         switch (event.type) {
                         case SDL_QUIT:
@@ -452,7 +454,15 @@ int main(int argc, char **argv)
                         }
                 }
 
+                frames++;
                 render(renderer, textures);
+                post_tick = SDL_GetTicks();
+                Uint32 used = post_tick - pre_tick;
+                int delay = TICK_PER_FRAME - used;
+                if (delay > 0) {
+                        SDL_Delay(delay);
+                }
+                pre_tick = post_tick;
         }
 
         end_ticks = SDL_GetTicks();
