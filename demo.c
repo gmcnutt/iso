@@ -15,6 +15,9 @@ enum texture_indices {
         WALL_LEFT_TEXTURE,
         WALL_RIGHT_TEXTURE,
         WALL_TOP_TEXTURE,
+        SHORT_WALL_LEFT_TEXTURE,
+        SHORT_WALL_RIGHT_TEXTURE,
+        SHORT_WALL_TOP_TEXTURE,
         N_TEXTURES
 };
 
@@ -45,6 +48,7 @@ typedef struct {
 
 
 #define FIRST_WALL_TEXTURE WALL_LEFT_TEXTURE
+#define FIRST_SHORT_WALL_TEXTURE SHORT_WALL_LEFT_TEXTURE
 #define MAP_H (map_surface->h)
 #define MAP_W (map_surface->w)
 #define TILE_HEIGHT 18
@@ -55,13 +59,16 @@ typedef struct {
 #define TICK_PER_FRAME (1000 / FPS)
 
 #define wall_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL)
-
+#define truncate_wall_at(x, y) ((x) > cursor_x && (y) > cursor_y)
 
 static const char *texture_files[] = {
         "grass.png",
         "wall_left.png",
         "wall_right.png",
         "wall_top.png",
+        "short_wall_left.png",
+        "short_wall_right.png",
+        "wall_top.png",         /* reuse top texture */
         "map.png"
 };
 
@@ -71,6 +78,7 @@ static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
 static model_t wall_model = { 0 };
+static model_t short_wall_model = { 0 };
 
 /**
  * XXX: this could be done as a preprocessing step that generates a header
@@ -241,12 +249,15 @@ static inline int in_fov(int map_x, int map_y)
 
 static int blocks_fov(int map_x, int map_y, int img_h)
 {
+
         while (img_h > TILE_HEIGHT) {
                 if ((in_fov(map_x - 1, map_y - 1) &&
                      !wall_at(map_x - 1, map_y - 1))) {
                         return 1;
                 }
                 img_h -= TILE_HEIGHT;
+                map_x -= 1;
+                map_y -= 1;
         }
         return 0;
 }
@@ -278,6 +289,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                 for (col = 0; col < map_w; col++, idx++) {
                         if (map.vis[idx]) {
                                 pixel_t pixel = get_pixel(col, row);
+                                model_t *model = NULL;
                                 switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
                                         dst.x = screen_x(col, row) + map_x;
@@ -287,18 +299,12 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                        &src, &dst);
                                         break;
                                 case PIXEL_VALUE_WALL:
-                                        /* Don't render walls where the
-                                         * camera and the player can't
-                                         * see at least one face in
-                                         * common. */
-                                        if (col > cursor_x && row > cursor_y) {
-                                                SDL_SetRenderDrawColor(renderer,
-                                                                       255, 255,
-                                                                       0,
-                                                                       SDL_ALPHA_OPAQUE);
-                                                iso_square(renderer, map_w,
-                                                           map_h, col, row);
-                                                continue;
+                                        model = &wall_model;
+                                        /* Don't render walls between the
+                                         * player and the camera but show they
+                                         * are there. */
+                                        if (truncate_wall_at(col, row)) {
+                                                model = &short_wall_model;
                                         }
 
                                         for (int j = 0; j < N_MODEL_FACES; j++) {
@@ -309,20 +315,27 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                  * when it doesn't. */
                                                 if ((j == MODEL_FACE_LEFT &&
                                                      (wall_at(col, row + 1) &&
-                                                      in_fov(col, row + 1))) ||
+                                                      in_fov(col, row + 1) &&
+                                                      ((model ==
+                                                        &short_wall_model) ||
+                                                       !(truncate_wall_at
+                                                         (col, row + 1))))) ||
                                                     (j == MODEL_FACE_RIGHT &&
                                                      (wall_at(col + 1, row) &&
-                                                      in_fov(col + 1, row)))) {
+                                                      in_fov(col + 1, row) &&
+                                                      ((model ==
+                                                        &short_wall_model) ||
+                                                       !(truncate_wall_at
+                                                         (col + 1, row)))))) {
                                                         continue;
                                                 }
 
                                                 SDL_Texture *texture =
-                                                    textures[j +
-                                                             FIRST_WALL_TEXTURE];
+                                                    model->textures[j];
                                                 SDL_Rect *offset =
-                                                    &wall_model.offsets[j];
-                                                dst.w = wall_model.offsets[j].w;
-                                                dst.h = wall_model.offsets[j].h;
+                                                    &model->offsets[j];
+                                                dst.w = model->offsets[j].w;
+                                                dst.h = model->offsets[j].h;
                                                 dst.x =
                                                     screen_x(col,
                                                              row) + map_x +
@@ -333,7 +346,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
                                                 int transparent =
                                                     blocks_fov(col, row,
-                                                               wall_model.height);
+                                                               model->height);
                                                 if (transparent) {
                                                         SDL_SetTextureAlphaMod
                                                             (texture, 128);
@@ -439,6 +452,7 @@ int main(int argc, char **argv)
         }
 
         setup_model(&wall_model, &textures[FIRST_WALL_TEXTURE]);
+        setup_model(&short_wall_model, &textures[FIRST_SHORT_WALL_TEXTURE]);
 
         if (!
             (map_surface =
