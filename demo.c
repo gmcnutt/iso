@@ -275,7 +275,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         for (row = 0, idx = 0; row < map_h; row++) {
                 for (col = 0; col < map_w; col++, idx++) {
                         if (map.vis[idx]) {
-                                pixel_t pixel = get_pixel(row, col);
+                                pixel_t pixel = get_pixel(col, row);
                                 switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
                                         dst.x = screen_x(col, row) + map_x;
@@ -420,7 +420,7 @@ int main(int argc, char **argv)
 
         setup_model(&wall_model, &textures[FIRST_WALL_TEXTURE]);
 
-        if (!(map_surface = get_map_surface("map.png"))) {
+        if (!(map_surface = get_map_surface(args.filename ? args.filename : "map.png"))) {
                 goto destroy_textures;
         }
 
