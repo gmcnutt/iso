@@ -40,26 +40,37 @@ struct args {
 
 typedef struct {
         SDL_Texture *textures[N_MODEL_FACES];
-        SDL_Rect offsets[N_MODEL_FACES];        /* Shift textures from the default
-                                                 * position where the tile would
-                                                 * normally be placed */
+        
+        /* The offsets shift textures from the default position where the tile
+         * would normally be placed */
+        SDL_Rect offsets[N_MODEL_FACES];
+        
         size_t height;          /* total height in pixels */
 } model_t;
 
 
 #define FIRST_WALL_TEXTURE WALL_LEFT_TEXTURE
 #define FIRST_SHORT_WALL_TEXTURE SHORT_WALL_LEFT_TEXTURE
+#define FPS 60
 #define MAP_H (map_surface->h)
 #define MAP_W (map_surface->w)
 #define TILE_HEIGHT 18
 #define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 #define TILE_WIDTH 36
 #define TILE_WIDTH_HALF (TILE_WIDTH / 2)
-#define FPS 60
 #define TICK_PER_FRAME (1000 / FPS)
+#define VIEW_H 12
+#define VIEW_W 12
+/* The isometric view is rotated 45 degrees clockwise. This means the tile at
+ * the lower left corner of the view (0, VIEW_H) should be at the left of the
+ * screen. */
+#define VIEW_OFFSET ((VIEW_H - 1) * TILE_WIDTH_HALF)
+
 
 #define wall_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL)
 #define truncate_wall_at(x, y) ((x) > cursor_x && (y) > cursor_y)
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(a, b) ((a) > (b) ? (a) : (b))
 
 static const char *texture_files[] = {
         "grass.png",
@@ -232,14 +243,39 @@ static void clear_screen(SDL_Renderer * renderer)
         SDL_RenderClear(renderer);
 }
 
-static inline int screen_x(int map_x, int map_y)
+static inline int view_to_screen_x(int view_x, int view_y)
 {
-        return (map_x - map_y) * TILE_WIDTH_HALF;
+        return (view_x - view_y) * TILE_WIDTH_HALF + VIEW_OFFSET;
 }
 
-static inline int screen_y(int map_x, int map_y)
+static inline int view_to_screen_y(int view_x, int view_y)
 {
-        return (map_x + map_y) * TILE_HEIGHT_HALF;
+        return (view_x + view_y) * TILE_HEIGHT_HALF;
+}
+
+static inline int view_to_map_x(size_t view_x)
+{
+        return cursor_x - VIEW_W / 2 + view_x;
+}
+
+static inline int view_to_map_y(size_t view_y)
+{
+        return cursor_y - VIEW_H / 2 + view_y;
+}
+
+static inline int map_to_view_x(size_t map_x)
+{
+        return map_x + VIEW_W / 2 - cursor_x;
+}
+
+static inline int map_to_view_y(size_t map_y)
+{
+        return map_y + VIEW_H / 2 - cursor_y;
+}
+
+static inline size_t map_xy_to_index(size_t map_x, size_t map_y)
+{
+        return map_y * MAP_W + map_x;
 }
 
 static inline int in_fov(int map_x, int map_y)
@@ -262,10 +298,8 @@ static int blocks_fov(int map_x, int map_y, int img_h)
         return 0;
 }
 
-static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
-                            int off_x, int off_y, int map_w, int map_h)
+static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
 {
-        size_t row, col, idx, map_x;
         SDL_Rect src, dst;
 
         src.x = 0;
@@ -276,24 +310,44 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         dst.w = TILE_WIDTH;
         dst.h = TILE_HEIGHT;
 
-        map_x = screen_x(map_h - 1, 0);
-
+        /* A view looks at a part of the map (or the whole map, if the map is
+         * small). It is centered on the cursor. Each view tile corresponds to
+         * a map tile. I have to convert between view, tile and screen
+         * coordinates to blit the right map tile at the right screen
+         * position. */
+        
         /* Recompute fov based on player's position */
         fov(&map, cursor_x, cursor_y, FOV_RAD);
 
         /* Clear the screen to gray */
         clear_screen(renderer);
 
+        /* Clamp the view to the map boundaries. */
+        /* size_t view_left, view_right, view_top, view_bottom; */
+        /* view_left = max(0, map_to_view_x(0)); */
+        /* view_right = min(VIEW_W, map_to_view_x(VIEW_W)); */
+        /* view_top = min(0, map_to_view_y(0)); */
+        /* view_bottom = max(VIEW_W, map_to_view_y(VIEW_H)); */
+        
         /* Render the map as a tiled view */
-        for (row = 0, idx = 0; row < map_h; row++) {
-                for (col = 0; col < map_w; col++, idx++) {
-                        if (map.vis[idx]) {
-                                pixel_t pixel = get_pixel(col, row);
+        for (int view_y = 0; view_y < VIEW_H; view_y++) {
+                int map_y = view_to_map_y(view_y);
+                if (map_y < 0 || map_y >= MAP_H) {
+                        continue;
+                }
+                for (int view_x = 0; view_x < VIEW_W; view_x++) {
+                        int map_x = view_to_map_x(view_x);
+                        if (map_x < 0 || map_x >= MAP_W) {
+                                continue;
+                        }
+                        size_t map_index = map_xy_to_index(map_x, map_y);
+                        if (map.vis[map_index]) {
+                                pixel_t pixel = get_pixel(map_x, map_y);
                                 model_t *model = NULL;
                                 switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
-                                        dst.x = screen_x(col, row) + map_x;
-                                        dst.y = screen_y(col, row);
+                                        dst.x = view_to_screen_x(view_x, view_y);
+                                        dst.y = view_to_screen_y(view_x, view_y);
                                         SDL_RenderCopy(renderer,
                                                        textures[GRASS_TEXTURE],
                                                        &src, &dst);
@@ -303,7 +357,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                         /* Don't render walls between the
                                          * player and the camera but show they
                                          * are there. */
-                                        if (truncate_wall_at(col, row)) {
+                                        if (truncate_wall_at(map_x, map_y)) {
                                                 model = &short_wall_model;
                                         }
 
@@ -314,19 +368,19 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                  * applies and is wasted cpu
                                                  * when it doesn't. */
                                                 if ((j == MODEL_FACE_LEFT &&
-                                                     (wall_at(col, row + 1) &&
-                                                      in_fov(col, row + 1) &&
+                                                     (wall_at(map_x, map_y + 1) &&
+                                                      in_fov(map_x, map_y + 1) &&
                                                       ((model ==
                                                         &short_wall_model) ||
                                                        !(truncate_wall_at
-                                                         (col, row + 1))))) ||
+                                                         (map_x, map_y + 1))))) ||
                                                     (j == MODEL_FACE_RIGHT &&
-                                                     (wall_at(col + 1, row) &&
-                                                      in_fov(col + 1, row) &&
+                                                     (wall_at(map_x + 1, map_y) &&
+                                                      in_fov(map_x + 1, map_y) &&
                                                       ((model ==
                                                         &short_wall_model) ||
                                                        !(truncate_wall_at
-                                                         (col + 1, row)))))) {
+                                                         (map_x + 1, map_y)))))) {
                                                         continue;
                                                 }
 
@@ -337,15 +391,14 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                 dst.w = model->offsets[j].w;
                                                 dst.h = model->offsets[j].h;
                                                 dst.x =
-                                                    screen_x(col,
-                                                             row) + map_x +
-                                                    offset->x;
+                                                    view_to_screen_x(view_x,
+                                                             view_y) + offset->x;
                                                 dst.y =
-                                                    screen_y(col,
-                                                             row) - offset->y;
+                                                    view_to_screen_y(view_x,
+                                                             view_y) - offset->y;
 
                                                 int transparent =
-                                                    blocks_fov(col, row,
+                                                    blocks_fov(map_x, map_y,
                                                                model->height);
                                                 if (transparent) {
                                                         SDL_SetTextureAlphaMod
@@ -362,8 +415,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                         break;
                                 default:
                                         printf
-                                            ("Unknown pixel value: 0x%08x at (%ld, %ld)\n",
-                                             pixel, col, row);
+                                                ("Unknown pixel value: 0x%08x at (%d, %d)\n",
+                                                 pixel, map_x, map_y);
                                         break;
                                 }
                         }
@@ -376,13 +429,13 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
-        iso_square(renderer, map_w, map_h, cursor_x, cursor_y);
+        iso_square(renderer, VIEW_H, map_to_view_x(cursor_x), map_to_view_y(cursor_y));
 }
 
 static void render(SDL_Renderer * renderer, SDL_Texture ** textures)
 {
         clear_screen(renderer);
-        render_iso_test(renderer, textures, 0, 0, MAP_W, MAP_H);
+        render_iso_test(renderer, textures);
         SDL_RenderPresent(renderer);
 }
 
