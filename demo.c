@@ -18,6 +18,12 @@ enum texture_indices {
         SHORT_WALL_LEFT_TEXTURE,
         SHORT_WALL_RIGHT_TEXTURE,
         SHORT_WALL_TOP_TEXTURE,
+        GRAY_LEFT_TEXTURE,
+        GRAY_RIGHT_TEXTURE,
+        GRAY_TOP_TEXTURE,
+        SHORT_GRAY_LEFT_TEXTURE,
+        SHORT_GRAY_RIGHT_TEXTURE,
+        SHORT_GRAY_TOP_TEXTURE,
         N_TEXTURES
 };
 
@@ -29,13 +35,20 @@ enum wall_offsets {
 };
 
 enum pixel_values {
+        PIXEL_VALUE_TREE = 0x004001ff,
+        PIXEL_VALUE_SHRUB = 0x008000ff,
         PIXEL_VALUE_GRASS = 0x00ff00ff,
         PIXEL_VALUE_WALL = 0xffffffff
+};
+
+enum pixel_masks {
+        PIXEL_MASK_OPAQUE = 0x00000100  /* low bit of blue => opaque */
 };
 
 struct args {
         char *filename;
         char *cmd;
+        bool fov;
 };
 
 typedef struct {
@@ -49,6 +62,8 @@ typedef struct {
 } model_t;
 
 
+#define FIRST_SHORT_GRAY_TEXTURE SHORT_GRAY_LEFT_TEXTURE
+#define FIRST_GRAY_TEXTURE GRAY_LEFT_TEXTURE
 #define FIRST_WALL_TEXTURE WALL_LEFT_TEXTURE
 #define FIRST_SHORT_WALL_TEXTURE SHORT_WALL_LEFT_TEXTURE
 #define FPS 60
@@ -59,14 +74,15 @@ typedef struct {
 #define TILE_WIDTH 36
 #define TILE_WIDTH_HALF (TILE_WIDTH / 2)
 #define TICK_PER_FRAME (1000 / FPS)
-#define VIEW_H 31
-#define VIEW_W 31
+#define VIEW_H 41
+#define VIEW_W 41
 /* The isometric view is rotated 45 degrees clockwise. This means the tile at
  * the lower left corner of the view (0, VIEW_H) should be at the left of the
  * screen. */
 #define VIEW_OFFSET ((VIEW_H - 1) * TILE_WIDTH_HALF)
 
 
+#define opaque_at(x, y) (get_pixel((x), (y)) & PIXEL_MASK_OPAQUE)
 #define wall_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL)
 #define truncate_wall_at(x, y) ((x) > cursor_x && (y) > cursor_y)
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -80,7 +96,12 @@ static const char *texture_files[] = {
         "short_wall_left.png",
         "short_wall_right.png",
         "wall_top.png",         /* reuse top texture */
-        "map.png"
+        "gray_left.png",
+        "gray_right.png",
+        "gray_top.png",
+        "short_gray_left.png",
+        "short_gray_right.png",
+        "gray_top.png"
 };
 
 static SDL_Surface *map_surface = NULL; /* the map image */
@@ -90,6 +111,8 @@ static int cursor_x = 0;
 static int cursor_y = 0;
 static model_t wall_model = { 0 };
 static model_t short_wall_model = { 0 };
+static model_t gray_model = { 0 };
+static model_t short_gray_model = { 0 };
 
 /**
  * XXX: this could be done as a preprocessing step that generates a header
@@ -131,7 +154,6 @@ static inline pixel_t get_pixel(size_t x, size_t y)
         return *pixelptr;
 }
 
-
 static SDL_Surface *get_map_surface(const char *filename)
 {
         SDL_Surface *surface;
@@ -164,7 +186,7 @@ static void setup_fov()
 {
         for (size_t y = 0, index = 0; y < MAP_H; y++) {
                 for (size_t x = 0; x < MAP_W; x++, index++) {
-                        if (wall_at(x, y)) {
+                        if (opaque_at(x, y)) {
                                 map.opq[index] = 1;
                         }
                 }
@@ -206,7 +228,11 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit)
 static void print_usage(void)
 {
         printf("Usage:  demo [options] [command]\n"
-               "Options: \n" "    -h:	help\n" "    -i: image filename\n");
+               "Options: \n"
+               "    -f: disable fov\n"
+               "    -h:	help\n"
+               "    -i: image filename\n"
+                );
 }
 
 
@@ -219,8 +245,13 @@ static void parse_args(int argc, char **argv, struct args *args)
 
         memset(args, 0, sizeof (*args));
 
-        while ((c = getopt(argc, argv, "i:h")) != -1) {
+        args->fov = true;  /* default */
+        
+        while ((c = getopt(argc, argv, "i:hf")) != -1) {
                 switch (c) {
+                case 'f':
+                        args->fov = false;
+                        break;
                 case 'i':
                         args->filename = optarg;
                         break;
@@ -239,7 +270,7 @@ static void parse_args(int argc, char **argv, struct args *args)
 
 static void clear_screen(SDL_Renderer * renderer)
 {
-        SDL_SetRenderDrawColor(renderer, 255, 0, 255, SDL_ALPHA_OPAQUE);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 }
 
@@ -296,6 +327,22 @@ static int blocks_fov(int map_x, int map_y, int img_h)
                 map_y -= 1;
         }
         return 0;
+}
+
+static void render_model(SDL_Renderer *renderer, model_t *model, int view_x, int view_y, Uint8 red, Uint8 grn, Uint8 blu)
+{
+        for (int j = 0; j < N_MODEL_FACES; j++) {
+
+                SDL_Texture *texture = model->textures[j];
+                SDL_Rect *offset = &model->offsets[j];
+                SDL_Rect dst;
+                dst.w = model->offsets[j].w;
+                dst.h = model->offsets[j].h;
+                dst.x = view_to_screen_x(view_x, view_y) + offset->x;
+                dst.y = view_to_screen_y(view_x, view_y) - offset->y;
+                SDL_SetTextureColorMod(texture, red, grn, blu);
+                SDL_RenderCopy(renderer, texture, NULL, &dst);
+        }
 }
 
 static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
@@ -359,7 +406,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                                         /* Don't render walls between the
                                          * player and the camera but show they
                                          * are there. */
-                                        if (truncate_wall_at(map_x, map_y)) {
+                                        if (false && truncate_wall_at(map_x, map_y)) {
                                                 model = &short_wall_model;
                                         }
 
@@ -420,6 +467,12 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                                                                texture, NULL,
                                                                &dst);
                                         }
+                                        break;
+                                case PIXEL_VALUE_TREE:
+                                        render_model(renderer, &gray_model, view_x, view_y, 64, 128, 64);
+                                        break;
+                                case PIXEL_VALUE_SHRUB:
+                                        render_model(renderer, &short_gray_model, view_x, view_y, 128, 255, 128);
                                         break;
                                 default:
                                         printf
@@ -518,6 +571,8 @@ int main(int argc, char **argv)
 
         setup_model(&wall_model, &textures[FIRST_WALL_TEXTURE]);
         setup_model(&short_wall_model, &textures[FIRST_SHORT_WALL_TEXTURE]);
+        setup_model(&gray_model, &textures[FIRST_GRAY_TEXTURE]);
+        setup_model(&short_gray_model, &textures[FIRST_SHORT_GRAY_TEXTURE]);
 
         if (!
             (map_surface =
@@ -530,7 +585,9 @@ int main(int argc, char **argv)
         map.h = MAP_H;
         map.opq = calloc(1, map.w * map.h);
         map.vis = calloc(1, map.w * map.h);
-        setup_fov();
+        if (args.fov) {
+                setup_fov();
+        }
 
         start_ticks = SDL_GetTicks();
         pre_tick = SDL_GetTicks();
