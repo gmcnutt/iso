@@ -384,6 +384,10 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                                 continue;
                         }
                         size_t map_index = map_xy_to_index(map_x, map_y);
+                        if (map_x == cursor_x && map_y == cursor_y) {
+                                render_model(renderer, &gray_model, view_x, view_y, 255, 128, 64);
+                                continue;
+                        }
                         if (map.vis[map_index]) {
                                 pixel_t pixel = get_pixel(map_x, map_y);
                                 model_t *model = NULL;
