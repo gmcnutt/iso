@@ -81,12 +81,12 @@ typedef struct {
  * screen. */
 #define VIEW_OFFSET ((VIEW_H - 1) * TILE_WIDTH_HALF)
 
-
-#define opaque_at(x, y) (get_pixel((x), (y)) & PIXEL_MASK_OPAQUE)
-#define wall_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL)
-#define truncate_wall_at(x, y) ((x) > cursor_x && (y) > cursor_y)
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#define between(x, l, r) (((l) < (x)) && (x) < (r))
 #define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define opaque_at(x, y) (get_pixel((x), (y)) & PIXEL_MASK_OPAQUE)
+#define truncate_wall_at(x, y) (between(x, cursor_x - 1, cursor_x + 6) && between(y, cursor_y - 1, cursor_y + 6))
+#define wall_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL)
 
 static const char *texture_files[] = {
         "grass.png",
@@ -406,7 +406,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                                         /* Don't render walls between the
                                          * player and the camera but show they
                                          * are there. */
-                                        if (false && truncate_wall_at(map_x, map_y)) {
+                                        if (truncate_wall_at(map_x, map_y)) {
                                                 model = &short_wall_model;
                                         }
 
@@ -485,8 +485,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
         }
 
         /* Paint the grid */
-        /* SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128); */
-        /* iso_grid(renderer, VIEW_W, VIEW_H); */
+        SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128);
+        iso_grid(renderer, VIEW_W, VIEW_H);
 
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
