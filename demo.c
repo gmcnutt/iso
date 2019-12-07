@@ -230,9 +230,7 @@ static void print_usage(void)
         printf("Usage:  demo [options] [command]\n"
                "Options: \n"
                "    -f: disable fov\n"
-               "    -h:	help\n"
-               "    -i: image filename\n"
-                );
+               "    -h:	help\n" "    -i: image filename\n");
 }
 
 
@@ -245,8 +243,8 @@ static void parse_args(int argc, char **argv, struct args *args)
 
         memset(args, 0, sizeof (*args));
 
-        args->fov = true;  /* default */
-        
+        args->fov = true;       /* default */
+
         while ((c = getopt(argc, argv, "i:hf")) != -1) {
                 switch (c) {
                 case 'f':
@@ -329,7 +327,8 @@ static int blocks_fov(int map_x, int map_y, int img_h)
         return 0;
 }
 
-static void render_model(SDL_Renderer *renderer, model_t *model, int view_x, int view_y, Uint8 red, Uint8 grn, Uint8 blu)
+static void render_model(SDL_Renderer * renderer, model_t * model, int view_x,
+                         int view_y, Uint8 red, Uint8 grn, Uint8 blu)
 {
         for (int j = 0; j < N_MODEL_FACES; j++) {
 
@@ -469,10 +468,14 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                                         }
                                         break;
                                 case PIXEL_VALUE_TREE:
-                                        render_model(renderer, &gray_model, view_x, view_y, 64, 128, 64);
+                                        render_model(renderer, &gray_model,
+                                                     view_x, view_y, 64, 128,
+                                                     64);
                                         break;
                                 case PIXEL_VALUE_SHRUB:
-                                        render_model(renderer, &short_gray_model, view_x, view_y, 128, 255, 128);
+                                        render_model(renderer,
+                                                     &short_gray_model, view_x,
+                                                     view_y, 128, 255, 128);
                                         break;
                                 default:
                                         printf
