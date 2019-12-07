@@ -239,7 +239,7 @@ static void parse_args(int argc, char **argv, struct args *args)
 
 static void clear_screen(SDL_Renderer * renderer)
 {
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+        SDL_SetRenderDrawColor(renderer, 255, 0, 255, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 }
 
@@ -307,9 +307,6 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
         src.w = TILE_WIDTH;
         src.h = TILE_HEIGHT;
 
-        dst.w = TILE_WIDTH;
-        dst.h = TILE_HEIGHT;
-
         /* A view looks at a part of the map (or the whole map, if the map is
          * small). It is centered on the cursor. Each view tile corresponds to
          * a map tile. I have to convert between view, tile and screen
@@ -350,6 +347,9 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                                             view_to_screen_x(view_x, view_y);
                                         dst.y =
                                             view_to_screen_y(view_x, view_y);
+                                        dst.w = TILE_WIDTH;
+                                        dst.h = TILE_HEIGHT;
+
                                         SDL_RenderCopy(renderer,
                                                        textures[GRASS_TEXTURE],
                                                        &src, &dst);
@@ -462,6 +462,8 @@ static SDL_Texture *load_texture(SDL_Renderer * renderer, const char *filename)
                 printf("%s:SDL_CreateTextureFromSurface:%s\n",
                        __FUNCTION__, SDL_GetError());
         }
+
+        printf("%s %dx%d\n", filename, surface->w, surface->h);
 
         SDL_FreeSurface(surface);
 
