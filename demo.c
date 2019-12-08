@@ -86,7 +86,7 @@ typedef struct {
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define opaque_at(x, y) (get_pixel((x), (y)) & PIXEL_MASK_OPAQUE)
 #define truncate_wall_at(x, y) (between(x, cursor_x - 1, cursor_x + 6) && between(y, cursor_y - 1, cursor_y + 6))
-#define wall_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL)
+#define tall_model_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL || get_pixel((x), (y)) == PIXEL_VALUE_TREE)
 
 static const char *texture_files[] = {
         "grass.png",
@@ -110,7 +110,7 @@ static model_t short_gray_model = { 0 };
  * XXX: this could be done as a preprocessing step that generates a header
  * file with static declarations of all the model data.
  */
-static void setup_model(model_t * model, SDL_Texture ** textures)
+static void model_setup(model_t * model, SDL_Texture ** textures)
 {
         /* Store the textures and their sizes. */
         for (size_t i = 0; i < N_MODEL_FACES; i++) {
@@ -323,7 +323,7 @@ static int blocks_fov(int map_x, int map_y, int img_h)
 
         while (img_h > TILE_HEIGHT) {
                 if ((in_fov(map_x - 1, map_y - 1) &&
-                     !wall_at(map_x - 1, map_y - 1))) {
+                     !tall_model_at(map_x - 1, map_y - 1))) {
                         return 1;
                 }
                 img_h -= TILE_HEIGHT;
@@ -333,7 +333,7 @@ static int blocks_fov(int map_x, int map_y, int img_h)
         return 0;
 }
 
-static void render_model(SDL_Renderer * renderer, model_t * model, int view_x,
+static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
                          int view_y, Uint8 red, Uint8 grn, Uint8 blu, int flags)
 {
         for (int j = 0; j < N_MODEL_FACES; j++) {
@@ -400,7 +400,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                         }
                         size_t map_index = map_xy_to_index(map_x, map_y);
                         if (map_x == cursor_x && map_y == cursor_y) {
-                                render_model(renderer, &gray_model, view_x,
+                                model_render(renderer, &gray_model, view_x,
                                              view_y, 255, 128, 64, 0);
                                 continue;
                         }
@@ -422,6 +422,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                        &src, &dst);
                                         break;
                                 case PIXEL_VALUE_WALL:
+                                case PIXEL_VALUE_TREE:
 
                                         /* Truncate walls between the focus and the camera. */
                                         if (truncate_wall_at(map_x, map_y)) {
@@ -444,7 +445,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                          * behind them. It's inefficient and
                                          * when transparency is applied it
                                          * looks chaotic.  */
-                                        if (wall_at(map_x, map_y + 1)
+                                        if (tall_model_at(map_x, map_y + 1)
                                             && in_fov(map_x,
                                                       map_y + 1) &&
                                             ((model ==
@@ -454,7 +455,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
-                                        if (wall_at
+                                        if (tall_model_at
                                             (map_x + 1, map_y) &&
                                             in_fov(map_x + 1,
                                                    map_y) &&
@@ -466,17 +467,18 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
 
-                                        render_model(renderer, model,
-                                                     view_x, view_y, 64, 96,
-                                                     128, flags);
-                                        break;
-                                case PIXEL_VALUE_TREE:
-                                        render_model(renderer, &gray_model,
-                                                     view_x, view_y, 64, 128,
-                                                     64, flags);
+                                        if (pixel == PIXEL_VALUE_WALL) {
+                                                model_render(renderer, model,
+                                                             view_x, view_y, 64, 96,
+                                                             128, flags);
+                                        } else {
+                                                model_render(renderer, model,
+                                                             view_x, view_y, 64, 128,
+                                                             64, flags);
+                                        }
                                         break;
                                 case PIXEL_VALUE_SHRUB:
-                                        render_model(renderer,
+                                        model_render(renderer,
                                                      &short_gray_model, view_x,
                                                      view_y, 128, 255, 128,
                                                      flags);
@@ -577,8 +579,8 @@ int main(int argc, char **argv)
                 }
         }
 
-        setup_model(&gray_model, &textures[FIRST_GRAY_TEXTURE]);
-        setup_model(&short_gray_model, &textures[FIRST_SHORT_GRAY_TEXTURE]);
+        model_setup(&gray_model, &textures[FIRST_GRAY_TEXTURE]);
+        model_setup(&short_gray_model, &textures[FIRST_SHORT_GRAY_TEXTURE]);
 
         if (!
             (map_surface =
