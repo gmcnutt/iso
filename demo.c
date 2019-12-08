@@ -49,6 +49,7 @@ struct args {
         char *filename;
         char *cmd;
         bool fov;
+        bool delay;
 };
 
 typedef struct {
@@ -230,6 +231,7 @@ static void print_usage(void)
         printf("Usage:  demo [options] [command]\n"
                "Options: \n"
                "    -f: disable fov\n"
+               "    -d: disable delay (show true framerate)\n"
                "    -h:	help\n" "    -i: image filename\n");
 }
 
@@ -241,12 +243,17 @@ static void parse_args(int argc, char **argv, struct args *args)
 {
         int c = 0;
 
+        /* Set defaults */
         memset(args, 0, sizeof (*args));
+        args->fov = true;
+        args->delay = true;
 
-        args->fov = true;       /* default */
-
-        while ((c = getopt(argc, argv, "i:hf")) != -1) {
+        /* Get user args */
+        while ((c = getopt(argc, argv, "i:hfd")) != -1) {
                 switch (c) {
+                case 'd':
+                        args->delay = false;
+                        break;
                 case 'f':
                         args->fov = false;
                         break;
@@ -538,7 +545,7 @@ int main(int argc, char **argv)
         SDL_Texture *textures[N_TEXTURES] = { 0 };
 
         int done = 0;
-        Uint32 start_ticks, end_ticks, frames = 0, pre_tick, post_tick = 0;
+        Uint32 start_ticks, end_ticks, frames = 0, pre_tick;
         struct args args;
 
 
@@ -619,13 +626,16 @@ int main(int argc, char **argv)
 
                 frames++;
                 render(renderer, textures);
-                post_tick = SDL_GetTicks();
-                Uint32 used = post_tick - pre_tick;
-                int delay = TICK_PER_FRAME - used;
-                if (delay > 0) {
-                        SDL_Delay(delay);
+
+                if (args.delay) {
+                        Uint32 post_tick = SDL_GetTicks();
+                        Uint32 used = post_tick - pre_tick;
+                        int delay = TICK_PER_FRAME - used;
+                        if (delay > 0) {
+                                SDL_Delay(delay);
+                        }
+                        pre_tick = post_tick;
                 }
-                pre_tick = post_tick;
         }
 
         end_ticks = SDL_GetTicks();
