@@ -9,7 +9,7 @@ CFLAGS += -fPIC
 LDLIBS = `pkg-config --libs sdl2 SDL2_image` -lgcu -lm
 
 ifeq ($(OPTIMIZE), true)
-	CFLAGS += -O3
+	CFLAGS += -O2
 endif
 
 .PHONY: clean indent

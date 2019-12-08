@@ -10,6 +10,10 @@
 
 typedef uint32_t pixel_t;
 
+enum {
+        MODEL_RENDER_FLAG_TRANSPARENT = 1
+};
+
 enum texture_indices {
         GRASS_TEXTURE = 0,
         WALL_LEFT_TEXTURE,
@@ -50,6 +54,7 @@ struct args {
         char *cmd;
         bool fov;
         bool delay;
+        bool transparency;
 };
 
 typedef struct {
@@ -228,11 +233,13 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit)
  */
 static void print_usage(void)
 {
-        printf("Usage:  demo [options] [command]\n"
-               "Options: \n"
-               "    -f: disable fov\n"
-               "    -d: disable delay (show true framerate)\n"
-               "    -h:	help\n" "    -i: image filename\n");
+        printf("Usage:  demo [options] [command]\n");
+        printf("Options: \n");
+        printf("  -d: disable delay (show true framerate)\n");
+        printf("  -f: disable fov\n");
+        printf("  -h: help\n" );
+        printf("  -i: image filename\n");
+        printf("  -t: enable transparency\n");
 }
 
 
@@ -249,7 +256,7 @@ static void parse_args(int argc, char **argv, struct args *args)
         args->delay = true;
 
         /* Get user args */
-        while ((c = getopt(argc, argv, "i:hfd")) != -1) {
+        while ((c = getopt(argc, argv, "i:hfdt")) != -1) {
                 switch (c) {
                 case 'd':
                         args->delay = false;
@@ -263,6 +270,9 @@ static void parse_args(int argc, char **argv, struct args *args)
                 case 'h':
                         print_usage();
                         exit(0);
+                case 't':
+                        args->transparency = true;
+                        break;
                 case '?':
                 default:
                         print_usage();
@@ -335,7 +345,7 @@ static int blocks_fov(int map_x, int map_y, int img_h)
 }
 
 static void render_model(SDL_Renderer * renderer, model_t * model, int view_x,
-                         int view_y, Uint8 red, Uint8 grn, Uint8 blu)
+                         int view_y, Uint8 red, Uint8 grn, Uint8 blu, int flags)
 {
         for (int j = 0; j < N_MODEL_FACES; j++) {
 
@@ -346,12 +356,14 @@ static void render_model(SDL_Renderer * renderer, model_t * model, int view_x,
                 dst.h = model->offsets[j].h;
                 dst.x = view_to_screen_x(view_x, view_y) + offset->x;
                 dst.y = view_to_screen_y(view_x, view_y) - offset->y;
+                Uint8 alpha = (flags & MODEL_RENDER_FLAG_TRANSPARENT) ? 128 : 255;
+                SDL_SetTextureAlphaMod(texture, alpha);
                 SDL_SetTextureColorMod(texture, red, grn, blu);
                 SDL_RenderCopy(renderer, texture, NULL, &dst);
         }
 }
 
-static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
+static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures, bool transparency)
 {
         SDL_Rect src, dst;
 
@@ -368,9 +380,6 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
 
         /* Recompute fov based on player's position */
         fov(&map, cursor_x, cursor_y, FOV_RAD);
-
-        /* Clear the screen to gray */
-        clear_screen(renderer);
 
         /* Clamp the view to the map boundaries. */
         /* size_t view_left, view_right, view_top, view_bottom; */
@@ -392,12 +401,13 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                         }
                         size_t map_index = map_xy_to_index(map_x, map_y);
                         if (map_x == cursor_x && map_y == cursor_y) {
-                                render_model(renderer, &gray_model, view_x, view_y, 255, 128, 64);
+                                render_model(renderer, &gray_model, view_x, view_y, 255, 128, 64, 0);
                                 continue;
                         }
                         if (map.vis[map_index]) {
                                 pixel_t pixel = get_pixel(map_x, map_y);
                                 model_t *model = NULL;
+                                int flags = 0;
                                 switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
@@ -412,14 +422,23 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                                                        &src, &dst);
                                         break;
                                 case PIXEL_VALUE_WALL:
-                                        model = &wall_model;
+                                        model = &gray_model;
                                         /* Don't render walls between the
                                          * player and the camera but show they
                                          * are there. */
                                         if (truncate_wall_at(map_x, map_y)) {
-                                                model = &short_wall_model;
+                                                model = &short_gray_model;
                                         }
 
+                                        if (transparency &&
+                                            blocks_fov(map_x, map_y, model->height)) {
+                                                flags |= MODEL_RENDER_FLAG_TRANSPARENT;
+                                        };
+                                        
+                                        render_model(renderer, model,
+                                                     view_x, view_y, 64, 96,
+                                                     128, flags);
+                                        break;
                                         for (int j = 0; j < N_MODEL_FACES; j++) {
                                                 /* Don't render overlapping
                                                  * vertical faces, it looks
@@ -481,12 +500,12 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                                 case PIXEL_VALUE_TREE:
                                         render_model(renderer, &gray_model,
                                                      view_x, view_y, 64, 128,
-                                                     64);
+                                                     64, flags);
                                         break;
                                 case PIXEL_VALUE_SHRUB:
                                         render_model(renderer,
                                                      &short_gray_model, view_x,
-                                                     view_y, 128, 255, 128);
+                                                     view_y, 128, 255, 128, flags);
                                         break;
                                 default:
                                         printf
@@ -508,10 +527,10 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures)
                    map_to_view_y(cursor_y));
 }
 
-static void render(SDL_Renderer * renderer, SDL_Texture ** textures)
+static void render(SDL_Renderer * renderer, SDL_Texture ** textures, bool transparency)
 {
         clear_screen(renderer);
-        render_iso_test(renderer, textures);
+        render_iso_test(renderer, textures, transparency);
         SDL_RenderPresent(renderer);
 }
 
@@ -617,7 +636,7 @@ int main(int argc, char **argv)
                                 break;
                         case SDL_WINDOWEVENT:
                                 frames++;
-                                render(renderer, textures);
+                                render(renderer, textures, args.transparency);
                                 break;
                         default:
                                 break;
@@ -625,7 +644,7 @@ int main(int argc, char **argv)
                 }
 
                 frames++;
-                render(renderer, textures);
+                render(renderer, textures, args.transparency);
 
                 if (args.delay) {
                         Uint32 post_tick = SDL_GetTicks();
