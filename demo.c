@@ -11,7 +11,9 @@
 typedef uint32_t pixel_t;
 
 enum {
-        MODEL_RENDER_FLAG_TRANSPARENT = 1
+        MODEL_RENDER_FLAG_TRANSPARENT = 1,
+        MODEL_RENDER_FLAG_SKIPLEFT = 2,
+        MODEL_RENDER_FLAG_SKIPRIGHT = 4
 };
 
 enum texture_indices {
@@ -237,7 +239,7 @@ static void print_usage(void)
         printf("Options: \n");
         printf("  -d: disable delay (show true framerate)\n");
         printf("  -f: disable fov\n");
-        printf("  -h: help\n" );
+        printf("  -h: help\n");
         printf("  -i: image filename\n");
         printf("  -t: enable transparency\n");
 }
@@ -349,6 +351,14 @@ static void render_model(SDL_Renderer * renderer, model_t * model, int view_x,
 {
         for (int j = 0; j < N_MODEL_FACES; j++) {
 
+                if (j == MODEL_FACE_LEFT &&
+                    (flags & MODEL_RENDER_FLAG_SKIPLEFT)) {
+                        continue;
+                }
+                if (j == MODEL_FACE_RIGHT &&
+                    (flags & MODEL_RENDER_FLAG_SKIPRIGHT)) {
+                        continue;
+                }
                 SDL_Texture *texture = model->textures[j];
                 SDL_Rect *offset = &model->offsets[j];
                 SDL_Rect dst;
@@ -356,14 +366,16 @@ static void render_model(SDL_Renderer * renderer, model_t * model, int view_x,
                 dst.h = model->offsets[j].h;
                 dst.x = view_to_screen_x(view_x, view_y) + offset->x;
                 dst.y = view_to_screen_y(view_x, view_y) - offset->y;
-                Uint8 alpha = (flags & MODEL_RENDER_FLAG_TRANSPARENT) ? 128 : 255;
+                Uint8 alpha =
+                    (flags & MODEL_RENDER_FLAG_TRANSPARENT) ? 128 : 255;
                 SDL_SetTextureAlphaMod(texture, alpha);
                 SDL_SetTextureColorMod(texture, red, grn, blu);
                 SDL_RenderCopy(renderer, texture, NULL, &dst);
         }
 }
 
-static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures, bool transparency)
+static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
+                            bool transparency)
 {
         SDL_Rect src, dst;
 
@@ -401,7 +413,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures, bo
                         }
                         size_t map_index = map_xy_to_index(map_x, map_y);
                         if (map_x == cursor_x && map_y == cursor_y) {
-                                render_model(renderer, &gray_model, view_x, view_y, 255, 128, 64, 0);
+                                render_model(renderer, &gray_model, view_x,
+                                             view_y, 255, 128, 64, 0);
                                 continue;
                         }
                         if (map.vis[map_index]) {
@@ -422,80 +435,53 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures, bo
                                                        &src, &dst);
                                         break;
                                 case PIXEL_VALUE_WALL:
-                                        model = &gray_model;
-                                        /* Don't render walls between the
-                                         * player and the camera but show they
-                                         * are there. */
+
+                                        /* Truncate walls between the focus and the camera. */
                                         if (truncate_wall_at(map_x, map_y)) {
                                                 model = &short_gray_model;
+                                        } else {
+                                                model = &gray_model;
                                         }
 
-                                        if (transparency &&
-                                            blocks_fov(map_x, map_y, model->height)) {
-                                                flags |= MODEL_RENDER_FLAG_TRANSPARENT;
+                                        /* Make walls that block fov beyond the focus see-through. */
+                                        if (transparency) {
+                                                if (blocks_fov
+                                                    (map_x, map_y,
+                                                     model->height)) {
+                                                        flags |=
+                                                            MODEL_RENDER_FLAG_TRANSPARENT;
+                                                }
                                         };
-                                        
+
+                                        /* Don't blit faces that overlap faces
+                                         * behind them. It's inefficient and
+                                         * when transparency is applied it
+                                         * looks chaotic.  */
+                                        if (wall_at(map_x, map_y + 1)
+                                            && in_fov(map_x,
+                                                      map_y + 1) &&
+                                            ((model ==
+                                              &short_wall_model) ||
+                                             !(truncate_wall_at
+                                               (map_x, map_y + 1)))) {
+                                                flags |=
+                                                    MODEL_RENDER_FLAG_SKIPLEFT;
+                                        }
+                                        if (wall_at
+                                            (map_x + 1, map_y) &&
+                                            in_fov(map_x + 1,
+                                                   map_y) &&
+                                            ((model ==
+                                              &short_wall_model) ||
+                                             !(truncate_wall_at
+                                               (map_x + 1, map_y)))) {
+                                                flags |=
+                                                    MODEL_RENDER_FLAG_SKIPRIGHT;
+                                        }
+
                                         render_model(renderer, model,
                                                      view_x, view_y, 64, 96,
                                                      128, flags);
-                                        break;
-                                        for (int j = 0; j < N_MODEL_FACES; j++) {
-                                                /* Don't render overlapping
-                                                 * vertical faces, it looks
-                                                 * weird when transparency
-                                                 * applies and is wasted cpu
-                                                 * when it doesn't. */
-                                                if ((j == MODEL_FACE_LEFT &&
-                                                     (wall_at(map_x, map_y + 1)
-                                                      && in_fov(map_x,
-                                                                map_y + 1) &&
-                                                      ((model ==
-                                                        &short_wall_model) ||
-                                                       !(truncate_wall_at
-                                                         (map_x, map_y + 1)))))
-                                                    || (j == MODEL_FACE_RIGHT &&
-                                                        (wall_at
-                                                         (map_x + 1, map_y) &&
-                                                         in_fov(map_x + 1,
-                                                                map_y) &&
-                                                         ((model ==
-                                                           &short_wall_model) ||
-                                                          !(truncate_wall_at
-                                                            (map_x + 1,
-                                                             map_y)))))) {
-                                                        continue;
-                                                }
-
-                                                SDL_Texture *texture =
-                                                    model->textures[j];
-                                                SDL_Rect *offset =
-                                                    &model->offsets[j];
-                                                dst.w = model->offsets[j].w;
-                                                dst.h = model->offsets[j].h;
-                                                dst.x =
-                                                    view_to_screen_x(view_x,
-                                                                     view_y) +
-                                                    offset->x;
-                                                dst.y =
-                                                    view_to_screen_y(view_x,
-                                                                     view_y) -
-                                                    offset->y;
-
-                                                int transparent =
-                                                    blocks_fov(map_x, map_y,
-                                                               model->height);
-                                                if (transparent) {
-                                                        SDL_SetTextureAlphaMod
-                                                            (texture, 128);
-                                                } else {
-                                                        SDL_SetTextureAlphaMod
-                                                            (texture, 255);
-                                                };
-
-                                                SDL_RenderCopy(renderer,
-                                                               texture, NULL,
-                                                               &dst);
-                                        }
                                         break;
                                 case PIXEL_VALUE_TREE:
                                         render_model(renderer, &gray_model,
@@ -505,7 +491,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures, bo
                                 case PIXEL_VALUE_SHRUB:
                                         render_model(renderer,
                                                      &short_gray_model, view_x,
-                                                     view_y, 128, 255, 128, flags);
+                                                     view_y, 128, 255, 128,
+                                                     flags);
                                         break;
                                 default:
                                         printf
@@ -527,7 +514,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures, bo
                    map_to_view_y(cursor_y));
 }
 
-static void render(SDL_Renderer * renderer, SDL_Texture ** textures, bool transparency)
+static void render(SDL_Renderer * renderer, SDL_Texture ** textures,
+                   bool transparency)
 {
         clear_screen(renderer);
         render_iso_test(renderer, textures, transparency);
