@@ -16,14 +16,8 @@ enum {
         MODEL_RENDER_FLAG_SKIPRIGHT = 4
 };
 
-enum texture_indices {
+enum {
         GRASS_TEXTURE = 0,
-        WALL_LEFT_TEXTURE,
-        WALL_RIGHT_TEXTURE,
-        WALL_TOP_TEXTURE,
-        SHORT_WALL_LEFT_TEXTURE,
-        SHORT_WALL_RIGHT_TEXTURE,
-        SHORT_WALL_TOP_TEXTURE,
         GRAY_LEFT_TEXTURE,
         GRAY_RIGHT_TEXTURE,
         GRAY_TOP_TEXTURE,
@@ -33,21 +27,21 @@ enum texture_indices {
         N_TEXTURES
 };
 
-enum wall_offsets {
+enum {
         MODEL_FACE_LEFT,
         MODEL_FACE_RIGHT,
         MODEL_FACE_TOP,
         N_MODEL_FACES
 };
 
-enum pixel_values {
+enum {
         PIXEL_VALUE_TREE = 0x004001ff,
         PIXEL_VALUE_SHRUB = 0x008000ff,
         PIXEL_VALUE_GRASS = 0x00ff00ff,
         PIXEL_VALUE_WALL = 0xffffffff
 };
 
-enum pixel_masks {
+enum {
         PIXEL_MASK_OPAQUE = 0x00000100  /* low bit of blue => opaque */
 };
 
@@ -72,8 +66,6 @@ typedef struct {
 
 #define FIRST_SHORT_GRAY_TEXTURE SHORT_GRAY_LEFT_TEXTURE
 #define FIRST_GRAY_TEXTURE GRAY_LEFT_TEXTURE
-#define FIRST_WALL_TEXTURE WALL_LEFT_TEXTURE
-#define FIRST_SHORT_WALL_TEXTURE SHORT_WALL_LEFT_TEXTURE
 #define FPS 60
 #define MAP_H (map_surface->h)
 #define MAP_W (map_surface->w)
@@ -98,12 +90,6 @@ typedef struct {
 
 static const char *texture_files[] = {
         "grass.png",
-        "wall_left.png",
-        "wall_right.png",
-        "wall_top.png",
-        "short_wall_left.png",
-        "short_wall_right.png",
-        "wall_top.png",         /* reuse top texture */
         "gray_left.png",
         "gray_right.png",
         "gray_top.png",
