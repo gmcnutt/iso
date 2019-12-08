@@ -17,13 +17,13 @@ enum {
 };
 
 enum {
-        GRASS_TEXTURE = 0,
-        GRAY_LEFT_TEXTURE,
-        GRAY_RIGHT_TEXTURE,
-        GRAY_TOP_TEXTURE,
-        SHORT_GRAY_LEFT_TEXTURE,
-        SHORT_GRAY_RIGHT_TEXTURE,
-        SHORT_GRAY_TOP_TEXTURE,
+        TEXTURE_GRASS,
+        TEXTURE_LEFTTALL,
+        TEXTURE_RIGHTTALL,
+        TEXTURE_TOP,
+        TEXTURE_LEFTSHORT,
+        TEXTURE_RIGHTSHORT,
+        TEXTURE_INTERIOR,
         N_TEXTURES
 };
 
@@ -32,6 +32,13 @@ enum {
         MODEL_FACE_RIGHT,
         MODEL_FACE_TOP,
         N_MODEL_FACES
+};
+
+enum {
+        MODEL_TALL,
+        MODEL_SHORT,
+        MODEL_INTERIOR,
+        N_MODELS
 };
 
 enum {
@@ -64,8 +71,6 @@ typedef struct {
 } model_t;
 
 
-#define FIRST_SHORT_GRAY_TEXTURE SHORT_GRAY_LEFT_TEXTURE
-#define FIRST_GRAY_TEXTURE GRAY_LEFT_TEXTURE
 #define FPS 60
 #define MAP_H (map_surface->h)
 #define MAP_W (map_surface->w)
@@ -95,7 +100,13 @@ static const char *texture_files[] = {
         "gray_top.png",
         "short_gray_left.png",
         "short_gray_right.png",
-        "gray_top.png"
+        "gray_interior.png"
+};
+
+static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
+        {TEXTURE_LEFTTALL, TEXTURE_RIGHTTALL, TEXTURE_TOP},     /* tall */
+        {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_TOP},   /* short */
+        {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_INTERIOR}       /* interior */
 };
 
 static SDL_Surface *map_surface = NULL; /* the map image */
@@ -103,20 +114,22 @@ static fov_map_t map;
 static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
-static model_t gray_model = { 0 };
-static model_t short_gray_model = { 0 };
+static model_t models[N_MODELS] = { 0 };
+
 
 /**
  * XXX: this could be done as a preprocessing step that generates a header
  * file with static declarations of all the model data.
  */
-static void model_setup(model_t * model, SDL_Texture ** textures)
+static void model_setup(model_t * model, SDL_Texture ** textures,
+                        const size_t * texture_indices)
 {
         /* Store the textures and their sizes. */
         for (size_t i = 0; i < N_MODEL_FACES; i++) {
-                model->textures[i] = textures[i];
-                SDL_QueryTexture(textures[i], NULL, NULL, &model->offsets[i].w,
-                                 &model->offsets[i].h);
+                size_t texture_index = texture_indices[i];
+                model->textures[i] = textures[texture_index];
+                SDL_QueryTexture(model->textures[i], NULL, NULL,
+                                 &model->offsets[i].w, &model->offsets[i].h);
         }
 
         model->offsets[MODEL_FACE_RIGHT].x = model->offsets[MODEL_FACE_LEFT].w;
@@ -400,14 +413,15 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                         }
                         size_t map_index = map_xy_to_index(map_x, map_y);
                         if (map_x == cursor_x && map_y == cursor_y) {
-                                model_render(renderer, &gray_model, view_x,
-                                             view_y, 255, 128, 64, 0);
+                                model_render(renderer, &models[MODEL_TALL],
+                                             view_x, view_y, 255, 128, 64, 0);
                                 continue;
                         }
                         if (map.vis[map_index]) {
                                 pixel_t pixel = get_pixel(map_x, map_y);
                                 model_t *model = NULL;
                                 int flags = 0;
+                                bool truncate = false;
                                 switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
@@ -418,27 +432,26 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                         dst.h = TILE_HEIGHT;
 
                                         SDL_RenderCopy(renderer,
-                                                       textures[GRASS_TEXTURE],
+                                                       textures[TEXTURE_GRASS],
                                                        &src, &dst);
                                         break;
                                 case PIXEL_VALUE_WALL:
                                 case PIXEL_VALUE_TREE:
 
                                         /* Truncate walls between the focus and the camera. */
-                                        if (truncate_wall_at(map_x, map_y)) {
-                                                model = &short_gray_model;
+                                        if ((truncate =
+                                             truncate_wall_at(map_x, map_y))) {
+                                                model = &models[MODEL_INTERIOR];
                                         } else {
-                                                model = &gray_model;
+                                                model = &models[MODEL_TALL];
                                         }
 
-                                        /* Make walls that block fov beyond the focus see-through. */
-                                        if (transparency) {
-                                                if (blocks_fov
-                                                    (map_x, map_y,
-                                                     model->height)) {
-                                                        flags |=
-                                                            MODEL_RENDER_FLAG_TRANSPARENT;
-                                                }
+                                        /* Make walls that block fov see-through. */
+                                        if (transparency &&
+                                            blocks_fov(map_x, map_y,
+                                                       model->height)) {
+                                                flags |=
+                                                    MODEL_RENDER_FLAG_TRANSPARENT;
                                         };
 
                                         /* Don't blit faces that overlap faces
@@ -448,19 +461,20 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                         if (tall_model_at(map_x, map_y + 1)
                                             && in_fov(map_x,
                                                       map_y + 1) &&
-                                            ((model ==
-                                              &short_gray_model) ||
+                                            (truncate ||
                                              !(truncate_wall_at
                                                (map_x, map_y + 1)))) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
-                                        if (tall_model_at
-                                            (map_x + 1, map_y) &&
-                                            in_fov(map_x + 1,
-                                                   map_y) &&
-                                            ((model ==
-                                              &short_gray_model) ||
+
+                                        /* If a tall model is in fov to our
+                                         * lower right, and we are truncated or
+                                         * it is truncated, then don't render
+                                         * our right face. */
+                                        if (tall_model_at(map_x + 1, map_y) &&
+                                            in_fov(map_x + 1, map_y) &&
+                                            (truncate ||
                                              !(truncate_wall_at
                                                (map_x + 1, map_y)))) {
                                                 flags |=
@@ -469,19 +483,19 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
                                         if (pixel == PIXEL_VALUE_WALL) {
                                                 model_render(renderer, model,
-                                                             view_x, view_y, 64, 96,
-                                                             128, flags);
+                                                             view_x, view_y, 64,
+                                                             96, 128, flags);
                                         } else {
                                                 model_render(renderer, model,
-                                                             view_x, view_y, 64, 128,
-                                                             64, flags);
+                                                             view_x, view_y, 64,
+                                                             128, 64, flags);
                                         }
                                         break;
                                 case PIXEL_VALUE_SHRUB:
                                         model_render(renderer,
-                                                     &short_gray_model, view_x,
-                                                     view_y, 128, 255, 128,
-                                                     flags);
+                                                     &models[MODEL_SHORT],
+                                                     view_x, view_y, 128, 255,
+                                                     128, flags);
                                         break;
                                 default:
                                         printf
@@ -579,8 +593,10 @@ int main(int argc, char **argv)
                 }
         }
 
-        model_setup(&gray_model, &textures[FIRST_GRAY_TEXTURE]);
-        model_setup(&short_gray_model, &textures[FIRST_SHORT_GRAY_TEXTURE]);
+        /* Setup the models */
+        for (size_t i = 0; i < N_MODELS; i++) {
+                model_setup(&models[i], textures, texture_indices[i]);
+        }
 
         if (!
             (map_surface =
