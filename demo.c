@@ -91,7 +91,6 @@ typedef struct {
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define opaque_at(x, y) (get_pixel((x), (y)) & PIXEL_MASK_OPAQUE)
 #define truncate_wall_at(x, y) (between(x, cursor_x - 1, cursor_x + 6) && between(y, cursor_y - 1, cursor_y + 6))
-#define tall_model_at(x, y) (get_pixel((x), (y)) == PIXEL_VALUE_WALL || get_pixel((x), (y)) == PIXEL_VALUE_TREE)
 
 static const char *texture_files[] = {
         "grass.png",
@@ -336,7 +335,7 @@ static int blocks_fov(int map_x, int map_y, int img_h)
 
         while (img_h > TILE_HEIGHT) {
                 if ((in_fov(map_x - 1, map_y - 1) &&
-                     !tall_model_at(map_x - 1, map_y - 1))) {
+                     !opaque_at(map_x - 1, map_y - 1))) {
                         return 1;
                 }
                 img_h -= TILE_HEIGHT;
@@ -458,7 +457,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                          * behind them. It's inefficient and
                                          * when transparency is applied it
                                          * looks chaotic.  */
-                                        if (tall_model_at(map_x, map_y + 1)
+                                        if (opaque_at(map_x, map_y + 1)
                                             && in_fov(map_x,
                                                       map_y + 1) &&
                                             (truncate ||
@@ -472,7 +471,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                          * lower right, and we are truncated or
                                          * it is truncated, then don't render
                                          * our right face. */
-                                        if (tall_model_at(map_x + 1, map_y) &&
+                                        if (opaque_at(map_x + 1, map_y) &&
                                             in_fov(map_x + 1, map_y) &&
                                             (truncate ||
                                              !(truncate_wall_at
@@ -483,8 +482,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
                                         if (pixel == PIXEL_VALUE_WALL) {
                                                 model_render(renderer, model,
-                                                             view_x, view_y, 64,
-                                                             96, 128, flags);
+                                                             view_x, view_y, 200,
+                                                             200, 255, flags);
                                         } else {
                                                 model_render(renderer, model,
                                                              view_x, view_y, 64,
