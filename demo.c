@@ -117,8 +117,6 @@ static fov_map_t map;
 static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
-static model_t wall_model = { 0 };
-static model_t short_wall_model = { 0 };
 static model_t gray_model = { 0 };
 static model_t short_gray_model = { 0 };
 
@@ -206,7 +204,7 @@ static void setup_fov()
 /**
  * Handle key presses.
  */
-void on_keydown(SDL_KeyboardEvent * event, int *quit)
+void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
 {
         switch (event->keysym.sym) {
         case SDLK_LEFT:
@@ -223,6 +221,9 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit)
                 break;
         case SDLK_q:
                 *quit = 1;
+                break;
+        case SDLK_t:
+                *transparency = !(*transparency);
                 break;
         default:
                 break;
@@ -461,7 +462,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                             && in_fov(map_x,
                                                       map_y + 1) &&
                                             ((model ==
-                                              &short_wall_model) ||
+                                              &short_gray_model) ||
                                              !(truncate_wall_at
                                                (map_x, map_y + 1)))) {
                                                 flags |=
@@ -472,7 +473,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                             in_fov(map_x + 1,
                                                    map_y) &&
                                             ((model ==
-                                              &short_wall_model) ||
+                                              &short_gray_model) ||
                                              !(truncate_wall_at
                                                (map_x + 1, map_y)))) {
                                                 flags |=
@@ -590,8 +591,6 @@ int main(int argc, char **argv)
                 }
         }
 
-        setup_model(&wall_model, &textures[FIRST_WALL_TEXTURE]);
-        setup_model(&short_wall_model, &textures[FIRST_SHORT_WALL_TEXTURE]);
         setup_model(&gray_model, &textures[FIRST_GRAY_TEXTURE]);
         setup_model(&short_gray_model, &textures[FIRST_SHORT_GRAY_TEXTURE]);
 
@@ -620,7 +619,8 @@ int main(int argc, char **argv)
                                 done = 1;
                                 break;
                         case SDL_KEYDOWN:
-                                on_keydown(&event.key, &done);
+                                on_keydown(&event.key, &done,
+                                           &args.transparency);
                                 break;
                         case SDL_WINDOWEVENT:
                                 frames++;
