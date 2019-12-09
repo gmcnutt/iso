@@ -45,6 +45,7 @@ enum {
         PIXEL_VALUE_TREE = 0x004001ff,
         PIXEL_VALUE_SHRUB = 0x008000ff,
         PIXEL_VALUE_GRASS = 0x00ff00ff,
+        PIXEL_VALUE_FLOOR = 0x0000f0ff,
         PIXEL_VALUE_WALL = 0xffffffff
 };
 
@@ -131,7 +132,7 @@ static void model_setup(model_t * model, SDL_Texture ** textures,
 {
         /* Store the textures and their sizes. */
         for (size_t i = 0; i < N_MODEL_FACES; i++) {
-                size_t texture_index = texture_indices[i];
+                int texture_index = texture_indices[i];
                 model->textures[i] = textures[texture_index];
                 SDL_QueryTexture(model->textures[i], NULL, NULL,
                                  &model->offsets[i].w, &model->offsets[i].h);
@@ -452,6 +453,12 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 }
 
                                 switch (pixel) {
+                                case PIXEL_VALUE_FLOOR:
+                                        model = &models[MODEL_SHORT];
+                                        model_render(renderer, model, 
+                                                     view_x, view_y, view_z,
+                                                     128, 128, 255, flags);
+                                        break;                                        
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
                                             view_to_screen_x(view_x, view_y,
@@ -461,6 +468,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                                              view_z);
                                         dst.w = TILE_WIDTH;
                                         dst.h = TILE_HEIGHT;
+
 
                                         if (transparency &&
                                             blocks_fov(map_x, map_y, view_z,
@@ -562,7 +570,9 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
         /* Render the main surface map */
         map_render(map_surface, renderer, textures, transparency, 0);
-        map_render(map_l2, renderer, textures, transparency, 5);
+        if (map_l2) {
+                map_render(map_l2, renderer, textures, transparency, 5);
+        }
 
         /* Paint the grid */
         SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128);
