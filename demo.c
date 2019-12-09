@@ -49,11 +49,13 @@ enum {
 };
 
 enum {
-        PIXEL_MASK_OPAQUE = 0x00000100  /* low bit of blue => opaque */
+        PIXEL_MASK_OPAQUE = 0x00000100,  /* blue bit 0 */
+        PIXEL_MASK_IMPASSABLE = 0x00000200  /* blue bit 1 */
 };
 
 struct args {
         char *filename;
+        char *filename_l2;
         char *cmd;
         bool fov;
         bool delay;
@@ -79,8 +81,8 @@ typedef struct {
 #define TILE_WIDTH 36
 #define TILE_WIDTH_HALF (TILE_WIDTH / 2)
 #define TICK_PER_FRAME (1000 / FPS)
-#define VIEW_H 41
-#define VIEW_W 41
+#define VIEW_H 35
+#define VIEW_W 35
 /* The isometric view is rotated 45 degrees clockwise. This means the tile at
  * the lower left corner of the view (0, VIEW_H) should be at the left of the
  * screen. */
@@ -89,7 +91,8 @@ typedef struct {
 #define between(x, l, r) (((l) < (x)) && (x) < (r))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
-#define opaque_at(x, y) (get_pixel((x), (y)) & PIXEL_MASK_OPAQUE)
+#define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
+#define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
 #define truncate_wall_at(x, y) (between(x, cursor_x - 1, cursor_x + 6) && between(y, cursor_y - 1, cursor_y + 6))
 
 static const char *texture_files[] = {
@@ -109,7 +112,8 @@ static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
 };
 
 static SDL_Surface *map_surface = NULL; /* the map image */
-static fov_map_t map;
+static SDL_Surface *map_l2 = NULL; /* optional second level map */
+static fov_map_t fov_map;
 static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
@@ -146,13 +150,13 @@ static void model_setup(model_t * model, SDL_Texture ** textures,
 }
 
 
-static inline pixel_t get_pixel(size_t x, size_t y)
+static inline pixel_t map_get_pixel(SDL_Surface *map, size_t x, size_t y)
 {
         /* The pitch is the length of a row of pixels in bytes. Find the first
          * byte of the desired pixel then cast it to an RGBA 32 bit value to
          * check it. */
-        size_t offset = (y * map_surface->pitch + x * sizeof (pixel_t));
-        uint8_t *byteptr = (uint8_t *) map_surface->pixels;
+        size_t offset = (y * map->pitch + x * sizeof (pixel_t));
+        uint8_t *byteptr = (uint8_t *) map->pixels;
         byteptr += offset;
         uint32_t *pixelptr = (uint32_t *) byteptr;
         return *pixelptr;
@@ -190,8 +194,8 @@ static void setup_fov()
 {
         for (size_t y = 0, index = 0; y < MAP_H; y++) {
                 for (size_t x = 0; x < MAP_W; x++, index++) {
-                        if (opaque_at(x, y)) {
-                                map.opq[index] = 1;
+                        if (map_opaque_at(map_surface, x, y)) {
+                                fov_map.opq[index] = 1;
                         }
                 }
         }
@@ -206,16 +210,24 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
 {
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                cursor_x--;
+                if (cursor_x > 0 && map_passable_at(map_surface, cursor_x - 1, cursor_y)) {
+                        cursor_x--;
+                }
                 break;
         case SDLK_RIGHT:
-                cursor_x++;
+                if (cursor_x < (MAP_W - 1) && map_passable_at(map_surface, cursor_x + 1, cursor_y)) {
+                        cursor_x++;
+                }
                 break;
         case SDLK_UP:
-                cursor_y--;
+                if (cursor_y > 0 && map_passable_at(map_surface, cursor_x, cursor_y - 1)) {
+                        cursor_y--;
+                }
                 break;
         case SDLK_DOWN:
-                cursor_y++;
+                if (cursor_y < (MAP_H - 1) && map_passable_at(map_surface, cursor_x, cursor_y + 1)) {
+                        cursor_y++;
+                }
                 break;
         case SDLK_q:
                 *quit = 1;
@@ -267,6 +279,11 @@ static void parse_args(int argc, char **argv, struct args *args)
                         break;
                 case 'i':
                         args->filename = optarg;
+                        /* A second level map can follow a comma */
+                        if ((args->filename_l2 = strchr(optarg, ','))) {
+                                *args->filename_l2 = '\0';
+                                args->filename_l2++;
+                        }
                         break;
                 case 'h':
                         print_usage();
@@ -327,7 +344,7 @@ static inline size_t map_xy_to_index(size_t map_x, size_t map_y)
 
 static inline int in_fov(int map_x, int map_y)
 {
-        return map.vis[map_x + map_y * MAP_W];
+        return fov_map.vis[map_x + map_y * MAP_W];
 }
 
 static int blocks_fov(int map_x, int map_y, int img_h)
@@ -335,7 +352,7 @@ static int blocks_fov(int map_x, int map_y, int img_h)
 
         while (img_h > TILE_HEIGHT) {
                 if ((in_fov(map_x - 1, map_y - 1) &&
-                     !opaque_at(map_x - 1, map_y - 1))) {
+                     !map_opaque_at(map_surface, map_x - 1, map_y - 1))) {
                         return 1;
                 }
                 img_h -= TILE_HEIGHT;
@@ -373,8 +390,8 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
-static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
-                            bool transparency)
+static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture ** textures,
+                       bool transparency)
 {
         SDL_Rect src, dst;
 
@@ -382,22 +399,6 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         src.y = 0;
         src.w = TILE_WIDTH;
         src.h = TILE_HEIGHT;
-
-        /* A view looks at a part of the map (or the whole map, if the map is
-         * small). It is centered on the cursor. Each view tile corresponds to
-         * a map tile. I have to convert between view, tile and screen
-         * coordinates to blit the right map tile at the right screen
-         * position. */
-
-        /* Recompute fov based on player's position */
-        fov(&map, cursor_x, cursor_y, FOV_RAD);
-
-        /* Clamp the view to the map boundaries. */
-        /* size_t view_left, view_right, view_top, view_bottom; */
-        /* view_left = max(0, map_to_view_x(0)); */
-        /* view_right = min(VIEW_W, map_to_view_x(VIEW_W)); */
-        /* view_top = min(0, map_to_view_y(0)); */
-        /* view_bottom = max(VIEW_W, map_to_view_y(VIEW_H)); */
 
         /* Render the map as a tiled view */
         for (int view_y = 0; view_y < VIEW_H; view_y++) {
@@ -416,8 +417,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                              view_x, view_y, 255, 128, 64, 0);
                                 continue;
                         }
-                        if (map.vis[map_index]) {
-                                pixel_t pixel = get_pixel(map_x, map_y);
+                        if (fov_map.vis[map_index]) {
+                                pixel_t pixel = map_get_pixel(map, map_x, map_y);
                                 model_t *model = NULL;
                                 int flags = 0;
                                 bool truncate = false;
@@ -457,7 +458,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                          * behind them. It's inefficient and
                                          * when transparency is applied it
                                          * looks chaotic.  */
-                                        if (opaque_at(map_x, map_y + 1)
+                                        if (map_opaque_at(map, map_x, map_y + 1)
                                             && in_fov(map_x,
                                                       map_y + 1) &&
                                             (truncate ||
@@ -471,7 +472,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                                          * lower right, and we are truncated or
                                          * it is truncated, then don't render
                                          * our right face. */
-                                        if (opaque_at(map_x + 1, map_y) &&
+                                        if (map_opaque_at(map, map_x + 1, map_y) &&
                                             in_fov(map_x + 1, map_y) &&
                                             (truncate ||
                                              !(truncate_wall_at
@@ -505,6 +506,18 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                         }
                 }
         }
+
+}
+
+static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
+                            bool transparency)
+{
+
+        /* Recompute fov based on player's position */
+        fov(&fov_map, cursor_x, cursor_y, FOV_RAD);
+
+        /* Render the main surface map */
+        map_render(map_surface, renderer, textures, transparency);
 
         /* Paint the grid */
         SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128);
@@ -603,11 +616,17 @@ int main(int argc, char **argv)
                 goto destroy_textures;
         }
 
+        if (args.filename_l2) {
+                if (!(map_l2 = get_map_surface(args.filename_l2))) {
+                        goto destroy_map;
+                }
+        }
+
         /* Setup the fov map. */
-        map.w = MAP_W;
-        map.h = MAP_H;
-        map.opq = calloc(1, map.w * map.h);
-        map.vis = calloc(1, map.w * map.h);
+        fov_map.w = MAP_W;
+        fov_map.h = MAP_H;
+        fov_map.opq = calloc(1, fov_map.w * fov_map.h);
+        fov_map.vis = calloc(1, fov_map.w * fov_map.h);
         if (args.fov) {
                 setup_fov();
         }
@@ -654,6 +673,10 @@ int main(int argc, char **argv)
                 printf("%2.2f FPS\n",
                        ((double)frames * 1000) / (end_ticks - start_ticks)
                     );
+        }
+destroy_map:
+        if (map_l2) {
+                SDL_FreeSurface(map_l2);
         }
         SDL_FreeSurface(map_surface);
 
