@@ -117,6 +117,7 @@ static fov_map_t fov_map;
 static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
+static int cursor_z = 0;
 static model_t models[N_MODELS] = { 0 };
 
 
@@ -307,14 +308,14 @@ static void clear_screen(SDL_Renderer * renderer)
         SDL_RenderClear(renderer);
 }
 
-static inline int view_to_screen_x(int view_x, int view_y)
+static inline int view_to_screen_x(int view_x, int view_y, int view_z)
 {
         return (view_x - view_y) * TILE_WIDTH_HALF + VIEW_OFFSET;
 }
 
-static inline int view_to_screen_y(int view_x, int view_y)
+static inline int view_to_screen_y(int view_x, int view_y, int view_z)
 {
-        return (view_x + view_y) * TILE_HEIGHT_HALF;
+        return (view_x + view_y) * TILE_HEIGHT_HALF - view_z * TILE_HEIGHT;
 }
 
 static inline int view_to_map_x(size_t view_x)
@@ -363,7 +364,7 @@ static int blocks_fov(int map_x, int map_y, int img_h)
 }
 
 static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
-                         int view_y, Uint8 red, Uint8 grn, Uint8 blu, int flags)
+                         int view_y, int view_z, Uint8 red, Uint8 grn, Uint8 blu, int flags)
 {
         for (int j = 0; j < N_MODEL_FACES; j++) {
 
@@ -380,8 +381,8 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
                 SDL_Rect dst;
                 dst.w = model->offsets[j].w;
                 dst.h = model->offsets[j].h;
-                dst.x = view_to_screen_x(view_x, view_y) + offset->x;
-                dst.y = view_to_screen_y(view_x, view_y) - offset->y;
+                dst.x = view_to_screen_x(view_x, view_y, view_z) + offset->x;
+                dst.y = view_to_screen_y(view_x, view_y, view_z) - offset->y;
                 Uint8 alpha =
                     (flags & MODEL_RENDER_FLAG_TRANSPARENT) ? 128 : 255;
                 SDL_SetTextureAlphaMod(texture, alpha);
@@ -391,7 +392,7 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
 }
 
 static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture ** textures,
-                       bool transparency)
+                       bool transparency, int view_z)
 {
         SDL_Rect src, dst;
 
@@ -412,22 +413,26 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
                                 continue;
                         }
                         size_t map_index = map_xy_to_index(map_x, map_y);
-                        if (map_x == cursor_x && map_y == cursor_y) {
+                        if (view_z == cursor_z && map_x == cursor_x && map_y == cursor_y) {
                                 model_render(renderer, &models[MODEL_TALL],
-                                             view_x, view_y, 255, 128, 64, 0);
+                                             view_x, view_y, view_z, 255, 128, 64, 0);
                                 continue;
                         }
                         if (fov_map.vis[map_index]) {
                                 pixel_t pixel = map_get_pixel(map, map_x, map_y);
+                                if (!pixel) {
+                                        /* transparent, nothing there */
+                                        continue;
+                                }
                                 model_t *model = NULL;
                                 int flags = 0;
                                 bool truncate = false;
                                 switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
-                                            view_to_screen_x(view_x, view_y);
+                                                view_to_screen_x(view_x, view_y, view_z);
                                         dst.y =
-                                            view_to_screen_y(view_x, view_y);
+                                                view_to_screen_y(view_x, view_y, view_z);
                                         dst.w = TILE_WIDTH;
                                         dst.h = TILE_HEIGHT;
 
@@ -483,18 +488,18 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
 
                                         if (pixel == PIXEL_VALUE_WALL) {
                                                 model_render(renderer, model,
-                                                             view_x, view_y, 200,
+                                                             view_x, view_y, view_z, 200,
                                                              200, 255, flags);
                                         } else {
                                                 model_render(renderer, model,
-                                                             view_x, view_y, 64,
+                                                             view_x, view_y, view_z, 64,
                                                              128, 64, flags);
                                         }
                                         break;
                                 case PIXEL_VALUE_SHRUB:
                                         model_render(renderer,
                                                      &models[MODEL_SHORT],
-                                                     view_x, view_y, 128, 255,
+                                                     view_x, view_y, view_z, 128, 255,
                                                      128, flags);
                                         break;
                                 default:
@@ -517,7 +522,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         fov(&fov_map, cursor_x, cursor_y, FOV_RAD);
 
         /* Render the main surface map */
-        map_render(map_surface, renderer, textures, transparency);
+        map_render(map_surface, renderer, textures, transparency, 0);
+        map_render(map_l2, renderer, textures, transparency, 5);
 
         /* Paint the grid */
         SDL_SetRenderDrawColor(renderer, 0, 64, 64, 128);
