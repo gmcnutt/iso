@@ -49,8 +49,8 @@ enum {
 };
 
 enum {
-        PIXEL_MASK_OPAQUE = 0x00000100,  /* blue bit 0 */
-        PIXEL_MASK_IMPASSABLE = 0x00000200  /* blue bit 1 */
+        PIXEL_MASK_OPAQUE = 0x00000100, /* blue bit 0 */
+        PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
 };
 
 struct args {
@@ -112,7 +112,7 @@ static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
 };
 
 static SDL_Surface *map_surface = NULL; /* the map image */
-static SDL_Surface *map_l2 = NULL; /* optional second level map */
+static SDL_Surface *map_l2 = NULL;      /* optional second level map */
 static fov_map_t fov_map;
 static const int FOV_RAD = 32;
 static int cursor_x = 0;
@@ -151,7 +151,7 @@ static void model_setup(model_t * model, SDL_Texture ** textures,
 }
 
 
-static inline pixel_t map_get_pixel(SDL_Surface *map, size_t x, size_t y)
+static inline pixel_t map_get_pixel(SDL_Surface * map, size_t x, size_t y)
 {
         /* The pitch is the length of a row of pixels in bytes. Find the first
          * byte of the desired pixel then cast it to an RGBA 32 bit value to
@@ -211,22 +211,26 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
 {
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                if (cursor_x > 0 && map_passable_at(map_surface, cursor_x - 1, cursor_y)) {
+                if (cursor_x > 0 &&
+                    map_passable_at(map_surface, cursor_x - 1, cursor_y)) {
                         cursor_x--;
                 }
                 break;
         case SDLK_RIGHT:
-                if (cursor_x < (MAP_W - 1) && map_passable_at(map_surface, cursor_x + 1, cursor_y)) {
+                if (cursor_x < (MAP_W - 1) &&
+                    map_passable_at(map_surface, cursor_x + 1, cursor_y)) {
                         cursor_x++;
                 }
                 break;
         case SDLK_UP:
-                if (cursor_y > 0 && map_passable_at(map_surface, cursor_x, cursor_y - 1)) {
+                if (cursor_y > 0 &&
+                    map_passable_at(map_surface, cursor_x, cursor_y - 1)) {
                         cursor_y--;
                 }
                 break;
         case SDLK_DOWN:
-                if (cursor_y < (MAP_H - 1) && map_passable_at(map_surface, cursor_x, cursor_y + 1)) {
+                if (cursor_y < (MAP_H - 1) &&
+                    map_passable_at(map_surface, cursor_x, cursor_y + 1)) {
                         cursor_y++;
                 }
                 break;
@@ -364,7 +368,8 @@ static int blocks_fov(int map_x, int map_y, int img_h)
 }
 
 static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
-                         int view_y, int view_z, Uint8 red, Uint8 grn, Uint8 blu, int flags)
+                         int view_y, int view_z, Uint8 red, Uint8 grn,
+                         Uint8 blu, int flags)
 {
         for (int j = 0; j < N_MODEL_FACES; j++) {
 
@@ -391,8 +396,8 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
-static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture ** textures,
-                       bool transparency, int view_z)
+static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
+                       SDL_Texture ** textures, bool transparency, int view_z)
 {
         SDL_Rect src, dst;
 
@@ -413,13 +418,16 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
                                 continue;
                         }
                         size_t map_index = map_xy_to_index(map_x, map_y);
-                        if (view_z == cursor_z && map_x == cursor_x && map_y == cursor_y) {
+                        if (view_z == cursor_z && map_x == cursor_x &&
+                            map_y == cursor_y) {
                                 model_render(renderer, &models[MODEL_TALL],
-                                             view_x, view_y, view_z, 255, 128, 64, 0);
+                                             view_x, view_y, view_z, 255, 128,
+                                             64, 0);
                                 continue;
                         }
                         if (fov_map.vis[map_index]) {
-                                pixel_t pixel = map_get_pixel(map, map_x, map_y);
+                                pixel_t pixel =
+                                    map_get_pixel(map, map_x, map_y);
                                 if (!pixel) {
                                         /* transparent, nothing there */
                                         continue;
@@ -430,9 +438,11 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
                                 switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
-                                                view_to_screen_x(view_x, view_y, view_z);
+                                            view_to_screen_x(view_x, view_y,
+                                                             view_z);
                                         dst.y =
-                                                view_to_screen_y(view_x, view_y, view_z);
+                                            view_to_screen_y(view_x, view_y,
+                                                             view_z);
                                         dst.w = TILE_WIDTH;
                                         dst.h = TILE_HEIGHT;
 
@@ -445,7 +455,8 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
 
                                         /* Truncate walls between the focus and the camera. */
                                         if ((truncate =
-                                             truncate_wall_at(map_x, map_y, view_z))) {
+                                             truncate_wall_at(map_x, map_y,
+                                                              view_z))) {
                                                 if (view_z > 0) {
                                                         continue;
                                                 }
@@ -480,8 +491,8 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
                                          * lower right, and we are truncated or
                                          * it is truncated, then don't render
                                          * our right face. */
-                                        if (map_opaque_at(map, map_x + 1, map_y) &&
-                                            in_fov(map_x + 1, map_y) &&
+                                        if (map_opaque_at(map, map_x + 1, map_y)
+                                            && in_fov(map_x + 1, map_y) &&
                                             (truncate ||
                                              !(truncate_wall_at
                                                (map_x + 1, map_y, view_z)))) {
@@ -491,24 +502,26 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
 
                                         if (pixel == PIXEL_VALUE_WALL) {
                                                 model_render(renderer, model,
-                                                             view_x, view_y, view_z, 200,
-                                                             200, 255, flags);
+                                                             view_x, view_y,
+                                                             view_z, 200, 200,
+                                                             255, flags);
                                         } else {
                                                 model_render(renderer, model,
-                                                             view_x, view_y, view_z, 64,
-                                                             128, 64, flags);
+                                                             view_x, view_y,
+                                                             view_z, 64, 128,
+                                                             64, flags);
                                         }
                                         break;
                                 case PIXEL_VALUE_SHRUB:
                                         model_render(renderer,
                                                      &models[MODEL_SHORT],
-                                                     view_x, view_y, view_z, 128, 255,
-                                                     128, flags);
+                                                     view_x, view_y, view_z,
+                                                     128, 255, 128, flags);
                                         break;
                                 default:
                                         printf
-                                            ("Unknown pixel value: 0x%08x at (%d, %d)\n",
-                                             pixel, map_x, map_y);
+                                            ("Unknown pixel value: 0x%08x at (%d, %d, %d)\n",
+                                             pixel, map_x, map_y, view_z);
                                         break;
                                 }
                         }
