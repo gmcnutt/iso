@@ -93,7 +93,8 @@ typedef struct {
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
 #define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
-#define truncate_wall_at(x, y, z) (between(x, cursor_x - 1, cursor_x + 6 + z) && between(y, cursor_y - 1, cursor_y + 6 + z))
+#define cutaway_at(x, y, z) (between(x, cursor_x - 1, cursor_x + 6 + z) && between(y, cursor_y - 1, cursor_y + 6 + z))
+#define on_map(x, y) (between((x), 0, MAP_W) && between((y), 0, MAP_H))
 
 static const char *texture_files[] = {
         "grass.png",
@@ -352,17 +353,26 @@ static inline int in_fov(int map_x, int map_y)
         return fov_map.vis[map_x + map_y * MAP_W];
 }
 
-static int blocks_fov(int map_x, int map_y, int img_h)
+static int blocks_fov(int map_x, int map_y, int view_z, int img_h)
 {
+        /* Adjust coords to be over the map the cursor is on. */
+        int off_x = view_z ? view_z : 1;
+        int off_y = view_z ? view_z : 1;
+        int vdist = view_z ? view_z : img_h;
+        int off_v = view_z ? 1 : -1;
 
-        while (img_h > TILE_HEIGHT) {
-                if ((in_fov(map_x - 1, map_y - 1) &&
-                     !map_opaque_at(map_surface, map_x - 1, map_y - 1))) {
+        /* XXX: Hack */
+        SDL_Surface *map = view_z ? map_l2 : map_surface;
+
+        while (vdist) {
+                if ((on_map(map_x - off_x, map_y - off_y) &&
+                     in_fov(map_x - off_x, map_y - off_y) &&
+                     !map_opaque_at(map, map_x, map_y))) {
                         return 1;
                 }
-                img_h -= TILE_HEIGHT;
-                map_x -= 1;
-                map_y -= 1;
+                vdist--;
+                map_x += off_v;
+                map_y += off_v;
         }
         return 0;
 }
@@ -434,7 +444,13 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 }
                                 model_t *model = NULL;
                                 int flags = 0;
-                                bool truncate = false;
+
+                                /* Cut away anything that obscures the cursor's immediate area. */
+                                bool cutaway = cutaway_at(map_x, map_y, view_z);
+                                if (cutaway && view_z > cursor_z) {
+                                        continue;
+                                }
+
                                 switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
@@ -446,6 +462,19 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         dst.w = TILE_WIDTH;
                                         dst.h = TILE_HEIGHT;
 
+                                        if (transparency &&
+                                            blocks_fov(map_x, map_y, view_z,
+                                                       1)) {
+                                                SDL_SetTextureAlphaMod(textures
+                                                                       [TEXTURE_GRASS],
+                                                                       128);
+                                        } else {
+
+                                                SDL_SetTextureAlphaMod(textures
+                                                                       [TEXTURE_GRASS],
+                                                                       255);
+                                        }
+
                                         SDL_RenderCopy(renderer,
                                                        textures[TEXTURE_GRASS],
                                                        &src, &dst);
@@ -453,25 +482,19 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 case PIXEL_VALUE_WALL:
                                 case PIXEL_VALUE_TREE:
 
-                                        /* Truncate walls between the focus and the camera. */
-                                        if ((truncate =
-                                             truncate_wall_at(map_x, map_y,
-                                                              view_z))) {
-                                                if (view_z > 0) {
-                                                        continue;
-                                                }
+                                        /* Truncate cutaway walls. */
+                                        if (cutaway) {
                                                 model = &models[MODEL_INTERIOR];
                                         } else {
                                                 model = &models[MODEL_TALL];
                                         }
 
-                                        /* Make walls that block fov see-through. */
                                         if (transparency &&
-                                            blocks_fov(map_x, map_y,
+                                            blocks_fov(map_x, map_y, view_z,
                                                        model->height)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
-                                        };
+                                        }
 
                                         /* Don't blit faces that overlap faces
                                          * behind them. It's inefficient and
@@ -480,21 +503,21 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         if (map_opaque_at(map, map_x, map_y + 1)
                                             && in_fov(map_x,
                                                       map_y + 1) &&
-                                            (truncate ||
-                                             !(truncate_wall_at
+                                            (cutaway ||
+                                             !(cutaway_at
                                                (map_x, map_y + 1, view_z)))) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
 
                                         /* If a tall model is in fov to our
-                                         * lower right, and we are truncated or
-                                         * it is truncated, then don't render
+                                         * lower right, and we are cutawayed or
+                                         * it is cutawayed, then don't render
                                          * our right face. */
                                         if (map_opaque_at(map, map_x + 1, map_y)
                                             && in_fov(map_x + 1, map_y) &&
-                                            (truncate ||
-                                             !(truncate_wall_at
+                                            (cutaway ||
+                                             !(cutaway_at
                                                (map_x + 1, map_y, view_z)))) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
