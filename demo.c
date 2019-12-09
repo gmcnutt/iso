@@ -93,7 +93,7 @@ typedef struct {
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
 #define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
-#define truncate_wall_at(x, y) (between(x, cursor_x - 1, cursor_x + 6) && between(y, cursor_y - 1, cursor_y + 6))
+#define truncate_wall_at(x, y, z) (between(x, cursor_x - 1, cursor_x + 6 + z) && between(y, cursor_y - 1, cursor_y + 6 + z))
 
 static const char *texture_files[] = {
         "grass.png",
@@ -445,7 +445,10 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
 
                                         /* Truncate walls between the focus and the camera. */
                                         if ((truncate =
-                                             truncate_wall_at(map_x, map_y))) {
+                                             truncate_wall_at(map_x, map_y, view_z))) {
+                                                if (view_z > 0) {
+                                                        continue;
+                                                }
                                                 model = &models[MODEL_INTERIOR];
                                         } else {
                                                 model = &models[MODEL_TALL];
@@ -468,7 +471,7 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
                                                       map_y + 1) &&
                                             (truncate ||
                                              !(truncate_wall_at
-                                               (map_x, map_y + 1)))) {
+                                               (map_x, map_y + 1, view_z)))) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
@@ -481,7 +484,7 @@ static void map_render(SDL_Surface *map, SDL_Renderer * renderer, SDL_Texture **
                                             in_fov(map_x + 1, map_y) &&
                                             (truncate ||
                                              !(truncate_wall_at
-                                               (map_x + 1, map_y)))) {
+                                               (map_x + 1, map_y, view_z)))) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
