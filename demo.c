@@ -70,7 +70,8 @@ typedef struct {
          * would normally be placed */
         SDL_Rect offsets[N_MODEL_FACES];
 
-        size_t height;          /* total height in pixels */
+        size_t screen_h;        /* total height in pixels */
+        size_t tile_h;          /* total height in tiles */
 } model_t;
 
 
@@ -120,6 +121,7 @@ static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
 static int cursor_z = 0;
+static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
 
 
@@ -146,10 +148,10 @@ static void model_setup(model_t * model, SDL_Texture ** textures,
         model->offsets[MODEL_FACE_TOP].y =
             (model->offsets[MODEL_FACE_LEFT].y +
              model->offsets[MODEL_FACE_TOP].h / 2);
-        model->height =
+        model->screen_h =
             model->offsets[MODEL_FACE_LEFT].h +
             model->offsets[MODEL_FACE_TOP].h / 2;
-
+        model->tile_h = model->screen_h / TILE_HEIGHT;
 }
 
 
@@ -203,48 +205,6 @@ static void setup_fov()
                 }
         }
 
-}
-
-
-/**
- * Handle key presses.
- */
-void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
-{
-        switch (event->keysym.sym) {
-        case SDLK_LEFT:
-                if (cursor_x > 0 &&
-                    map_passable_at(map_surface, cursor_x - 1, cursor_y)) {
-                        cursor_x--;
-                }
-                break;
-        case SDLK_RIGHT:
-                if (cursor_x < (MAP_W - 1) &&
-                    map_passable_at(map_surface, cursor_x + 1, cursor_y)) {
-                        cursor_x++;
-                }
-                break;
-        case SDLK_UP:
-                if (cursor_y > 0 &&
-                    map_passable_at(map_surface, cursor_x, cursor_y - 1)) {
-                        cursor_y--;
-                }
-                break;
-        case SDLK_DOWN:
-                if (cursor_y < (MAP_H - 1) &&
-                    map_passable_at(map_surface, cursor_x, cursor_y + 1)) {
-                        cursor_y++;
-                }
-                break;
-        case SDLK_q:
-                *quit = 1;
-                break;
-        case SDLK_t:
-                *transparency = !(*transparency);
-                break;
-        default:
-                break;
-        }
 }
 
 
@@ -314,6 +274,20 @@ static void clear_screen(SDL_Renderer * renderer)
         SDL_RenderClear(renderer);
 }
 
+static inline int screen_to_view_x(int screen_x, int screen_y)
+{
+        screen_x -= (VIEW_OFFSET + TILE_WIDTH_HALF);
+        return (int)((float)screen_x / (float)TILE_WIDTH +
+                     (float)screen_y / (float)TILE_HEIGHT);
+}
+
+static inline int screen_to_view_y(int screen_x, int screen_y)
+{
+        screen_x -= (VIEW_OFFSET + TILE_WIDTH_HALF);
+        return (int)((float)screen_y / (float)TILE_HEIGHT -
+                     (float)screen_x / (float)TILE_WIDTH);
+}
+
 static inline int view_to_screen_x(int view_x, int view_y, int view_z)
 {
         return (view_x - view_y) * TILE_WIDTH_HALF + VIEW_OFFSET;
@@ -334,14 +308,14 @@ static inline int view_to_map_y(size_t view_y)
         return cursor_y - VIEW_H / 2 + view_y;
 }
 
-static inline int map_to_view_x(size_t map_x)
+static inline int map_to_view_x(size_t map_x, int map_z)
 {
-        return map_x + VIEW_W / 2 - cursor_x;
+        return map_x + VIEW_W / 2 - cursor_x - map_z;
 }
 
-static inline int map_to_view_y(size_t map_y)
+static inline int map_to_view_y(size_t map_y, int map_z)
 {
-        return map_y + VIEW_H / 2 - cursor_y;
+        return map_y + VIEW_H / 2 - cursor_y - map_z;
 }
 
 static inline size_t map_xy_to_index(size_t map_x, size_t map_y)
@@ -354,27 +328,42 @@ static inline int in_fov(int map_x, int map_y)
         return fov_map.vis[map_x + map_y * MAP_W];
 }
 
-static int blocks_fov(int map_x, int map_y, int view_z, int img_h)
+static inline int view_rendered_at(size_t view_x, size_t view_y)
 {
-        /* Adjust coords to be over the map the cursor is on. */
-        int off_x = view_z ? view_z : 1;
-        int off_y = view_z ? view_z : 1;
-        int vdist = view_z ? view_z : img_h;
-        int off_v = view_z ? 1 : -1;
+        return rendered[view_y * VIEW_W + view_x];
+}
 
-        /* XXX: Hack */
-        SDL_Surface *map = view_z ? map_l2 : map_surface;
+static inline void view_set_rendered(size_t view_x, size_t view_y,
+                                     size_t tile_h)
+{
+        int index = view_y * VIEW_W + view_x;
+        while (tile_h && index > 0) {
+                rendered[index] = 1;
+                tile_h--;
+                index -= VIEW_W;
+        }
+}
 
-        while (vdist) {
-                if ((on_map(map_x - off_x, map_y - off_y) &&
-                     in_fov(map_x - off_x, map_y - off_y) &&
-                     !map_opaque_at(map, map_x, map_y))) {
+static inline void view_clear_rendered()
+{
+        memset(rendered, 0, sizeof (rendered));
+}
+
+static int blocks_fov(int map_x, int map_y, int view_z, int screen_h)
+{
+        int view_x = map_to_view_x(map_x, view_z);
+        int view_y = map_to_view_y(map_y, view_z);
+        int vdist = screen_h / TILE_HEIGHT;
+
+        while (vdist && view_x > 0 && view_y > 0) {
+                if (view_rendered_at(view_x, view_y)) {
                         return 1;
                 }
+                view_x--;
+                view_y--;
                 vdist--;
-                map_x += off_v;
-                map_y += off_v;
         }
+
         return 0;
 }
 
@@ -455,10 +444,16 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 switch (pixel) {
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
-                                        model_render(renderer, model, 
+                                        if (transparency &&
+                                            blocks_fov(map_x, map_y, view_z,
+                                                       model->screen_h)) {
+                                                flags |=
+                                                    MODEL_RENDER_FLAG_TRANSPARENT;
+                                        }
+                                        model_render(renderer, model,
                                                      view_x, view_y, view_z,
                                                      128, 128, 255, flags);
-                                        break;                                        
+                                        break;
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
                                             view_to_screen_x(view_x, view_y,
@@ -499,7 +494,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
 
                                         if (transparency &&
                                             blocks_fov(map_x, map_y, view_z,
-                                                       model->height)) {
+                                                       model->screen_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
@@ -555,6 +550,9 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                              pixel, map_x, map_y, view_z);
                                         break;
                                 }
+
+                                view_set_rendered(view_x, view_y,
+                                                  model ? model->tile_h : 1);
                         }
                 }
         }
@@ -564,6 +562,8 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
 static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                             bool transparency)
 {
+        /* Clear the rendered buffer */
+        view_clear_rendered();
 
         /* Recompute fov based on player's position */
         fov(&fov_map, cursor_x, cursor_y, FOV_RAD);
@@ -580,8 +580,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
-        iso_square(renderer, VIEW_H, map_to_view_x(cursor_x),
-                   map_to_view_y(cursor_y));
+        iso_square(renderer, VIEW_H, map_to_view_x(cursor_x, cursor_z),
+                   map_to_view_y(cursor_y, cursor_z));
 }
 
 static void render(SDL_Renderer * renderer, SDL_Texture ** textures,
@@ -612,6 +612,59 @@ static SDL_Texture *load_texture(SDL_Renderer * renderer, const char *filename)
         SDL_FreeSurface(surface);
 
         return texture;
+}
+
+/**
+ * Handle button clicks.
+ */
+void on_mouse_button(SDL_MouseButtonEvent * event)
+{
+        int view_x = screen_to_view_x(event->x, event->y);
+        int view_y = screen_to_view_y(event->x, event->y);
+        printf("screen (%d, %d) -> view (%d, %d)\n",
+               event->x - (VIEW_OFFSET + TILE_WIDTH_HALF), event->y, view_x,
+               view_y);
+}
+
+/**
+ * Handle key presses.
+ */
+void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
+{
+        switch (event->keysym.sym) {
+        case SDLK_LEFT:
+                if (cursor_x > 0 &&
+                    map_passable_at(map_surface, cursor_x - 1, cursor_y)) {
+                        cursor_x--;
+                }
+                break;
+        case SDLK_RIGHT:
+                if (cursor_x < (MAP_W - 1) &&
+                    map_passable_at(map_surface, cursor_x + 1, cursor_y)) {
+                        cursor_x++;
+                }
+                break;
+        case SDLK_UP:
+                if (cursor_y > 0 &&
+                    map_passable_at(map_surface, cursor_x, cursor_y - 1)) {
+                        cursor_y--;
+                }
+                break;
+        case SDLK_DOWN:
+                if (cursor_y < (MAP_H - 1) &&
+                    map_passable_at(map_surface, cursor_x, cursor_y + 1)) {
+                        cursor_y++;
+                }
+                break;
+        case SDLK_q:
+                *quit = 1;
+                break;
+        case SDLK_t:
+                *transparency = !(*transparency);
+                break;
+        default:
+                break;
+        }
 }
 
 int main(int argc, char **argv)
@@ -703,6 +756,8 @@ int main(int argc, char **argv)
                                 frames++;
                                 render(renderer, textures, args.transparency);
                                 break;
+                        case SDL_MOUSEBUTTONDOWN:
+                                on_mouse_button(&event.button);
                         default:
                                 break;
                         }
