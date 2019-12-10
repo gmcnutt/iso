@@ -297,24 +297,44 @@ static inline int view_to_screen_y(int view_x, int view_y, int view_z)
         return (view_x + view_y) * TILE_HEIGHT_HALF - view_z * TILE_HEIGHT;
 }
 
+static inline int view_to_camera_x(int view_x)
+{
+        return view_x - VIEW_W / 2;
+}
+
+static inline int view_to_camera_y(int view_y)
+{
+        return view_y - VIEW_H / 2;
+}
+
 static inline int view_to_map_x(size_t view_x)
 {
-        return cursor_x - VIEW_W / 2 + view_x;
+        return view_to_camera_x(view_x) + cursor_x;
 }
 
 static inline int view_to_map_y(size_t view_y)
 {
-        return cursor_y - VIEW_H / 2 + view_y;
+        return view_to_camera_y(view_y) + cursor_y;
+}
+
+static inline int map_to_camera_x(int map_x, int map_z)
+{
+        return (map_x - (map_z - cursor_z)) - cursor_x;
+}
+
+static inline int map_to_camera_y(int map_y, int map_z)
+{
+        return (map_y - (map_z - cursor_z)) - cursor_y;
 }
 
 static inline int map_to_view_x(size_t map_x, int map_z)
 {
-        return map_x + VIEW_W / 2 - cursor_x - map_z;
+        return map_to_camera_x(map_x, map_z) + VIEW_W / 2;
 }
 
 static inline int map_to_view_y(size_t map_y, int map_z)
 {
-        return map_y + VIEW_H / 2 - cursor_y - map_z;
+        return map_to_camera_x(map_y, map_z) + VIEW_H / 2;
 }
 
 static inline size_t map_xy_to_index(size_t map_x, size_t map_y)
