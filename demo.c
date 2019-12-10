@@ -340,7 +340,7 @@ static inline void view_set_rendered(size_t view_x, size_t view_y,
         while (tile_h && index > 0) {
                 rendered[index] = 1;
                 tile_h--;
-                index -= VIEW_W;
+                index -= (VIEW_W + 1);  /* up one row and left one column */
         }
 }
 
@@ -435,7 +435,8 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 model_t *model = NULL;
                                 int flags = 0;
 
-                                /* Cut away anything that obscures the cursor's immediate area. */
+                                /* Cut away anything that obscures the cursor's
+                                 * immediate area. */
                                 bool cutaway = cutaway_at(map_x, map_y, view_z);
                                 if (cutaway && view_z > cursor_z) {
                                         continue;
@@ -621,9 +622,13 @@ void on_mouse_button(SDL_MouseButtonEvent * event)
 {
         int view_x = screen_to_view_x(event->x, event->y);
         int view_y = screen_to_view_y(event->x, event->y);
-        printf("screen (%d, %d) -> view (%d, %d)\n",
-               event->x - (VIEW_OFFSET + TILE_WIDTH_HALF), event->y, view_x,
-               view_y);
+        int map_x = view_to_map_x(view_x);
+        int map_y = view_to_map_y(view_y);
+
+        printf("s(%d, %d) -> v(%d, %d) -> m(%d, %d) -> %c\n",
+               event->x, event->y,
+               view_x, view_y,
+               map_x, map_y, view_rendered_at(view_x, view_y) ? 't' : 'f');
 }
 
 /**
