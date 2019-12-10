@@ -351,24 +351,17 @@ static inline int rotate_x(int x, int y, int matrix[2][2])
 }
         
 
-static inline int map_to_camera_x(int map_x, int map_z)
+static inline void map_to_camera(point_t left, point_t right)
 {
-        return (map_x - (map_z - cursor[Z])) - cursor[X];
+        left[X] = (right[X] - (right[Z] - cursor[Z])) - cursor[X];
+        left[Y] = (right[Y] - (right[Z] - cursor[Z])) - cursor[Y];
 }
 
-static inline int map_to_camera_y(int map_y, int map_z)
+static inline void map_to_view(point_t l, point_t r)
 {
-        return (map_y - (map_z - cursor[Z])) - cursor[Y];
-}
-
-static inline int map_to_view_x(size_t map_x, int map_z)
-{
-        return map_to_camera_x(map_x, map_z) + VIEW_W / 2;
-}
-
-static inline int map_to_view_y(size_t map_y, int map_z)
-{
-        return map_to_camera_y(map_y, map_z) + VIEW_H / 2;
+        map_to_camera(l, r);
+        l[X] += VIEW_W / 2;
+        l[Y] += VIEW_H / 2;
 }
 
 static inline size_t map_xy_to_index(size_t map_x, size_t map_y)
@@ -638,9 +631,10 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         iso_grid(renderer, VIEW_W, VIEW_H);
 
         /* Paint a red square for a cursor position */
+        point_t view;
+        map_to_view(view, cursor);
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
-        iso_square(renderer, VIEW_H, map_to_view_x(cursor[X], cursor[Z]),
-                   map_to_view_y(cursor[Y], cursor[Z]));
+        iso_square(renderer, VIEW_H, view[X], view[Y]);
 }
 
 static void render(SDL_Renderer * renderer, SDL_Texture ** textures,
