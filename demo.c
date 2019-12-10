@@ -54,6 +54,14 @@ enum {
         PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
 };
 
+enum {
+        ROTATE_0,
+        ROTATE_90,
+        ROTATE_180,
+        ROTATE_270,
+        N_ROTATIONS
+};
+
 struct args {
         char *filename;
         char *filename_l2;
@@ -113,6 +121,17 @@ static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
         {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_INTERIOR}       /* interior */
 };
 
+static const int rotate[N_ROTATIONS][2][2] = {
+        {{ 1,  0}, /* 0 degrees */
+         { 0,  1}},
+        {{ 0, -1}, /* 90 degrees */
+         { 1,  0}},
+        {{-1,  0}, /* 180 degrees */
+         { 0, -1}},
+        {{ 0,  1}, /* 270 degrees */
+         {-1,  0}}
+};
+
 static SDL_Surface *map_surface = NULL; /* the map image */
 static SDL_Surface *map_l2 = NULL;      /* optional second level map */
 static fov_map_t fov_map;
@@ -120,9 +139,9 @@ static const int FOV_RAD = 32;
 static int cursor_x = 0;
 static int cursor_y = 0;
 static int cursor_z = 0;
+static int rotation = ROTATE_0;
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
-
 
 /**
  * XXX: this could be done as a preprocessing step that generates a header
@@ -317,6 +336,13 @@ static inline int view_to_map_y(size_t view_y)
         return view_to_camera_y(view_y) + cursor_y;
 }
 
+static inline int rotate_x(int x, int y, int matrix[2][2])
+{
+        return 0;
+        return (x * matrix[0][0] + y * matrix[0][1]);
+}
+        
+
 static inline int map_to_camera_x(int map_x, int map_z)
 {
         return (map_x - (map_z - cursor_z)) - cursor_x;
@@ -368,10 +394,8 @@ static inline void view_clear_rendered()
         memset(rendered, 0, sizeof (rendered));
 }
 
-static int blocks_fov(int map_x, int map_y, int view_z, int screen_h)
+static int blocks_fov(int view_x, int view_y, int view_z, int screen_h)
 {
-        int view_x = map_to_view_x(map_x, view_z);
-        int view_y = map_to_view_y(map_y, view_z);
         int vdist = screen_h / TILE_HEIGHT;
 
         while (vdist && view_x > 0 && view_y > 0) {
@@ -472,7 +496,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
                                         if (transparency &&
-                                            blocks_fov(map_x, map_y, view_z,
+                                            blocks_fov(view_x, view_y, view_z,
                                                        model->screen_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
@@ -493,7 +517,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
 
 
                                         if (transparency &&
-                                            blocks_fov(map_x, map_y, view_z,
+                                            blocks_fov(view_x, view_y, view_z,
                                                        1)) {
                                                 SDL_SetTextureAlphaMod(textures
                                                                        [TEXTURE_GRASS],
@@ -520,7 +544,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         }
 
                                         if (transparency &&
-                                            blocks_fov(map_x, map_y, view_z,
+                                            blocks_fov(view_x, view_y, view_z,
                                                        model->screen_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
