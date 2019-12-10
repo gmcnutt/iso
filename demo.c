@@ -9,6 +9,7 @@
 #include "iso.h"
 
 typedef uint32_t pixel_t;
+typedef int point_t[3];
 
 enum {
         MODEL_RENDER_FLAG_TRANSPARENT = 1,
@@ -62,6 +63,13 @@ enum {
         N_ROTATIONS
 };
 
+enum {
+        X,
+        Y,
+        Z,
+        N_DIMENSIONS
+};
+
 struct args {
         char *filename;
         char *filename_l2;
@@ -82,6 +90,8 @@ typedef struct {
         size_t tile_h;          /* total height in tiles */
 } model_t;
 
+
+#define point_init(p) ((p) = {0, 0, 0})
 
 #define FPS 60
 #define MAP_H (map_surface->h)
@@ -136,10 +146,8 @@ static SDL_Surface *map_surface = NULL; /* the map image */
 static SDL_Surface *map_l2 = NULL;      /* optional second level map */
 static fov_map_t fov_map;
 static const int FOV_RAD = 32;
-static int cursor_x = 0;
-static int cursor_y = 0;
-static int cursor_z = 0;
-static int rotation = ROTATE_0;
+static point_t cursor = {0};
+//static int rotation = ROTATE_0;
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
 
@@ -328,12 +336,12 @@ static inline int view_to_camera_y(int view_y)
 
 static inline int view_to_map_x(size_t view_x)
 {
-        return view_to_camera_x(view_x) + cursor_x;
+        return view_to_camera_x(view_x) + cursor[X];
 }
 
 static inline int view_to_map_y(size_t view_y)
 {
-        return view_to_camera_y(view_y) + cursor_y;
+        return view_to_camera_y(view_y) + cursor[Y];
 }
 
 static inline int rotate_x(int x, int y, int matrix[2][2])
@@ -345,12 +353,12 @@ static inline int rotate_x(int x, int y, int matrix[2][2])
 
 static inline int map_to_camera_x(int map_x, int map_z)
 {
-        return (map_x - (map_z - cursor_z)) - cursor_x;
+        return (map_x - (map_z - cursor[Z])) - cursor[X];
 }
 
 static inline int map_to_camera_y(int map_y, int map_z)
 {
-        return (map_y - (map_z - cursor_z)) - cursor_y;
+        return (map_y - (map_z - cursor[Z])) - cursor[Y];
 }
 
 static inline int map_to_view_x(size_t map_x, int map_z)
@@ -360,7 +368,7 @@ static inline int map_to_view_x(size_t map_x, int map_z)
 
 static inline int map_to_view_y(size_t map_y, int map_z)
 {
-        return map_to_camera_x(map_y, map_z) + VIEW_H / 2;
+        return map_to_camera_y(map_y, map_z) + VIEW_H / 2;
 }
 
 static inline size_t map_xy_to_index(size_t map_x, size_t map_y)
@@ -412,9 +420,9 @@ static int blocks_fov(int view_x, int view_y, int view_z, int screen_h)
 
 static bool cutaway_at(int map_x, int map_y, int view_z)
 {
-        int margin = view_z > cursor_z ? 2 : 1;
-        return (between(map_x, cursor_x - margin, cursor_x + 6 + view_z) &&
-                between(map_y, cursor_y - margin, cursor_y + 6 + view_z));
+        int margin = view_z > cursor[Z] ? 2 : 1;
+        return (between(map_x, cursor[X] - margin, cursor[X] + 6 + view_z) &&
+                between(map_y, cursor[Y] - margin, cursor[Y] + 6 + view_z));
 }
 
 static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
@@ -468,8 +476,8 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 continue;
                         }
                         size_t map_index = map_xy_to_index(map_x, map_y);
-                        if (view_z == cursor_z && map_x == cursor_x &&
-                            map_y == cursor_y) {
+                        if (view_z == cursor[Z] && map_x == cursor[X] &&
+                            map_y == cursor[Y]) {
                                 model_render(renderer, &models[MODEL_TALL],
                                              view_x, view_y, view_z, 255, 128,
                                              64, 0);
@@ -488,7 +496,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
                                 bool cutaway = cutaway_at(map_x, map_y, view_z);
-                                if (cutaway && view_z > cursor_z) {
+                                if (cutaway && view_z > cursor[Z]) {
                                         continue;
                                 }
 
@@ -617,7 +625,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         view_clear_rendered();
 
         /* Recompute fov based on player's position */
-        fov(&fov_map, cursor_x, cursor_y, FOV_RAD);
+        fov(&fov_map, cursor[X], cursor[Y], FOV_RAD);
 
         /* Render the main surface map */
         map_render(map_surface, renderer, textures, transparency, 0);
@@ -631,8 +639,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
         /* Paint a red square for a cursor position */
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
-        iso_square(renderer, VIEW_H, map_to_view_x(cursor_x, cursor_z),
-                   map_to_view_y(cursor_y, cursor_z));
+        iso_square(renderer, VIEW_H, map_to_view_x(cursor[X], cursor[Z]),
+                   map_to_view_y(cursor[Y], cursor[Z]));
 }
 
 static void render(SDL_Renderer * renderer, SDL_Texture ** textures,
@@ -688,27 +696,27 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
 {
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                if (cursor_x > 0 &&
-                    map_passable_at(map_surface, cursor_x - 1, cursor_y)) {
-                        cursor_x--;
+                if (cursor[X] > 0 &&
+                    map_passable_at(map_surface, cursor[X] - 1, cursor[Y])) {
+                        cursor[X]--;
                 }
                 break;
         case SDLK_RIGHT:
-                if (cursor_x < (MAP_W - 1) &&
-                    map_passable_at(map_surface, cursor_x + 1, cursor_y)) {
-                        cursor_x++;
+                if (cursor[X] < (MAP_W - 1) &&
+                    map_passable_at(map_surface, cursor[X] + 1, cursor[Y])) {
+                        cursor[X]++;
                 }
                 break;
         case SDLK_UP:
-                if (cursor_y > 0 &&
-                    map_passable_at(map_surface, cursor_x, cursor_y - 1)) {
-                        cursor_y--;
+                if (cursor[Y] > 0 &&
+                    map_passable_at(map_surface, cursor[X], cursor[Y] - 1)) {
+                        cursor[Y]--;
                 }
                 break;
         case SDLK_DOWN:
-                if (cursor_y < (MAP_H - 1) &&
-                    map_passable_at(map_surface, cursor_x, cursor_y + 1)) {
-                        cursor_y++;
+                if (cursor[Y] < (MAP_H - 1) &&
+                    map_passable_at(map_surface, cursor[X], cursor[Y] + 1)) {
+                        cursor[Y]++;
                 }
                 break;
         case SDLK_q:
