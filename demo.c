@@ -95,7 +95,6 @@ typedef struct {
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
 #define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
-#define cutaway_at(x, y, z) (between(x, cursor_x - 1, cursor_x + 6 + z) && between(y, cursor_y - 1, cursor_y + 6 + z))
 #define on_map(x, y) (between((x), 0, MAP_W) && between((y), 0, MAP_H))
 
 static const char *texture_files[] = {
@@ -365,6 +364,13 @@ static int blocks_fov(int map_x, int map_y, int view_z, int screen_h)
         }
 
         return 0;
+}
+
+static bool cutaway_at(int map_x, int map_y, int view_z)
+{
+        int margin = view_z > cursor_z ? 2 : 1;
+        return (between(map_x, cursor_x - margin, cursor_x + 6 + view_z) &&
+                between(map_y, cursor_y - margin, cursor_y + 6 + view_z));
 }
 
 static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
