@@ -93,6 +93,11 @@ typedef struct {
 
 
 #define point_init(p) ((p) = {0, 0, 0})
+#define point_copy(f, t) do {\
+                (t)[X] = (f)[X];\
+                (t)[Y] = (f)[Y];\
+                (t)[Z] = (f)[Z];\
+        } while(0);
 
 #define FPS 60
 #define MAP_H (map_surface->h)
@@ -110,6 +115,7 @@ typedef struct {
 #define VIEW_OFFSET ((VIEW_H - 1) * TILE_WIDTH_HALF)
 
 #define between(x, l, r) (((l) < (x)) && (x) < (r))
+#define between_inc(x, l, r) (((l) <= (x)) && (x) <= (r))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
@@ -703,35 +709,38 @@ void on_mouse_button(SDL_MouseButtonEvent * event)
                map[X], map[Y], view_rendered_at(view[X], view[Y]) ? 't' : 'f');
 }
 
+static void move_cursor(int dx, int dy)
+{
+        printf("move_cursor(%d, %d)\n", dx, dy);
+        point_t dir = {dx, dy, 0}, newcursor;
+        rotate(dir, camera_rotation);
+        point_copy(cursor, newcursor);
+        translate(newcursor, dir);
+        if (between_inc(newcursor[X], 0, MAP_W - 1) &&
+            between_inc(newcursor[Y], 0, MAP_H - 1) &&
+            map_passable_at(map_surface, newcursor[X], newcursor[Y])) {
+                point_copy(newcursor, cursor);
+        }
+}
+
 /**
  * Handle key presses.
  */
 void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
 {
+        printf("%d\n", event->keysym.sym);
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                if (cursor[X] > 0 &&
-                    map_passable_at(map_surface, cursor[X] - 1, cursor[Y])) {
-                        cursor[X]--;
-                }
+                move_cursor(-1, 0);
                 break;
         case SDLK_RIGHT:
-                if (cursor[X] < (MAP_W - 1) &&
-                    map_passable_at(map_surface, cursor[X] + 1, cursor[Y])) {
-                        cursor[X]++;
-                }
+                move_cursor(1, 0);
                 break;
         case SDLK_UP:
-                if (cursor[Y] > 0 &&
-                    map_passable_at(map_surface, cursor[X], cursor[Y] - 1)) {
-                        cursor[Y]--;
-                }
+                move_cursor(0, -1);
                 break;
         case SDLK_DOWN:
-                if (cursor[Y] < (MAP_H - 1) &&
-                    map_passable_at(map_surface, cursor[X], cursor[Y] + 1)) {
-                        cursor[Y]++;
-                }
+                move_cursor(0, 1);
                 break;
         case SDLK_q:
                 *quit = 1;
