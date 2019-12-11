@@ -17,6 +17,11 @@ Example:
 
     ./demo -i moongate_clearing.png,moongate_clearing_l2.png
 
+Key bindings:
+
+<arrow> - move cursor
+',','.' - rotate camera
+'t'     - toggle transparency
 
 Use the arrow keys to move the red cursor square around. 't' toggles
 transparency. Clicking a tile prints some info on stdout.
