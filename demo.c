@@ -10,6 +10,7 @@
 
 typedef uint32_t pixel_t;
 typedef int point_t[3];
+typedef int matrix_t[2][2];
 
 enum {
         MODEL_RENDER_FLAG_TRANSPARENT = 1,
@@ -55,13 +56,13 @@ enum {
         PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
 };
 
-enum {
+typedef enum {
         ROTATE_0,
         ROTATE_90,
         ROTATE_180,
         ROTATE_270,
         N_ROTATIONS
-};
+} rotation_t;
 
 enum {
         X,
@@ -131,23 +132,25 @@ static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
         {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_INTERIOR}       /* interior */
 };
 
-static const int rotate[N_ROTATIONS][2][2] = {
-        {{ 1,  0}, /* 0 degrees */
-         { 0,  1}},
-        {{ 0, -1}, /* 90 degrees */
-         { 1,  0}},
-        {{-1,  0}, /* 180 degrees */
-         { 0, -1}},
-        {{ 0,  1}, /* 270 degrees */
-         {-1,  0}}
+
+static const matrix_t rotations[N_ROTATIONS] = {
+        {{1, 0},                /* 0 degrees */
+         {0, 1}},
+        {{0, 1},                /* 90 degrees */
+         {-1, 0}},
+        {{-1, 0},               /* 180 degrees */
+         {0, -1}},
+        {{0, -1},               /* 270 degrees */
+         {1, 0}}
 };
 
 static SDL_Surface *map_surface = NULL; /* the map image */
 static SDL_Surface *map_l2 = NULL;      /* optional second level map */
 static fov_map_t fov_map;
 static const int FOV_RAD = 32;
-static point_t cursor = {0};
-//static int rotation = ROTATE_0;
+static point_t cursor = { 0 };
+
+static rotation_t camera_rotation = ROTATE_0;
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
 
@@ -334,22 +337,33 @@ static inline int view_to_camera_y(int view_y)
         return view_y - VIEW_H / 2;
 }
 
-static inline int view_to_map_x(size_t view_x)
+static inline void view_to_camera(point_t view, point_t cam)
 {
-        return view_to_camera_x(view_x) + cursor[X];
+        cam[X] = view[X] - VIEW_W / 2;
+        cam[Y] = view[Y] - VIEW_H / 2;
 }
 
-static inline int view_to_map_y(size_t view_y)
+static inline void rotate(point_t p, rotation_t r)
 {
-        return view_to_camera_y(view_y) + cursor[Y];
+        const matrix_t *m = &rotations[r];
+        int x = p[X], y = p[Y];
+        p[X] = x * (*m)[0][0] + y * (*m)[0][1];
+        p[Y] = x * (*m)[1][0] + y * (*m)[1][1];
 }
 
-static inline int rotate_x(int x, int y, int matrix[2][2])
+static inline void translate(point_t p, point_t o)
 {
-        return 0;
-        return (x * matrix[0][0] + y * matrix[0][1]);
+        p[X] += o[X];
+        p[Y] += o[Y];
 }
-        
+
+static inline void view_to_map(point_t view, point_t map)
+{
+        view_to_camera(view, map);
+        rotate(map, camera_rotation);
+        map[X] += cursor[X];
+        map[Y] += cursor[Y];
+}
 
 static inline void map_to_camera(point_t left, point_t right)
 {
@@ -459,12 +473,16 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
 
         /* Render the map as a tiled view */
         for (int view_y = 0; view_y < VIEW_H; view_y++) {
-                int map_y = view_to_map_y(view_y);
-                if (map_y < 0 || map_y >= MAP_H) {
-                        continue;
-                }
                 for (int view_x = 0; view_x < VIEW_W; view_x++) {
-                        int map_x = view_to_map_x(view_x);
+                        point_t vloc = { view_x, view_y, view_z };
+                        point_t mloc;
+                        view_to_map(vloc, mloc);
+                        int map_y = mloc[Y];
+                        int map_x = mloc[X];
+
+                        if (map_y < 0 || map_y >= MAP_H) {
+                                continue;
+                        }
                         if (map_x < 0 || map_x >= MAP_W) {
                                 continue;
                         }
@@ -672,15 +690,16 @@ static SDL_Texture *load_texture(SDL_Renderer * renderer, const char *filename)
  */
 void on_mouse_button(SDL_MouseButtonEvent * event)
 {
-        int view_x = screen_to_view_x(event->x, event->y);
-        int view_y = screen_to_view_y(event->x, event->y);
-        int map_x = view_to_map_x(view_x);
-        int map_y = view_to_map_y(view_y);
+        point_t view = { 0, 0, 0 };
+        view[X] = screen_to_view_x(event->x, event->y);
+        view[Y] = screen_to_view_y(event->x, event->y);
+        point_t map = { 0, 0, 0 };
+        view_to_map(view, map);
 
         printf("s(%d, %d) -> v(%d, %d) -> m(%d, %d) -> %c\n",
                event->x, event->y,
-               view_x, view_y,
-               map_x, map_y, view_rendered_at(view_x, view_y) ? 't' : 'f');
+               view[X], view[Y],
+               map[X], map[Y], view_rendered_at(view[X], view[Y]) ? 't' : 'f');
 }
 
 /**
@@ -718,6 +737,12 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
                 break;
         case SDLK_t:
                 *transparency = !(*transparency);
+                break;
+        case SDLK_PERIOD:
+                camera_rotation = (camera_rotation + 1) % N_ROTATIONS;
+                break;
+        case SDLK_COMMA:
+                camera_rotation = (camera_rotation - 1) % N_ROTATIONS;
                 break;
         default:
                 break;
