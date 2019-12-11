@@ -433,7 +433,7 @@ static int blocks_fov(int view_x, int view_y, int view_z, int screen_h)
 
 static bool cutaway_at(int view_x, int view_y, int view_z)
 {
-        int margin = view_z > cursor[Z] ? 2 : 1;
+        int margin = view_z > cursor[Z] ? 4 : 3;
         int cam_x = view_to_camera_x(view_x);
         int cam_y = view_to_camera_y(view_y);
         return (between(cam_x, -margin, 6 + view_z) &&
