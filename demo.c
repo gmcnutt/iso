@@ -467,6 +467,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                        SDL_Texture ** textures, bool transparency, int view_z)
 {
         SDL_Rect src, dst;
+        point_t nview, nmap;
 
         src.x = 0;
         src.y = 0;
@@ -575,9 +576,11 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                          * behind them. It's inefficient and
                                          * when transparency is applied it
                                          * looks chaotic.  */
-                                        if (map_opaque_at(map, map_x, map_y + 1)
-                                            && in_fov(map_x,
-                                                      map_y + 1) &&
+                                        nview[X] = view_x;
+                                        nview[Y] = view_y + 1;
+                                        view_to_map(nview, nmap);
+                                        if (map_opaque_at(map, nmap[X], nmap[Y])
+                                            && in_fov(nmap[X], nmap[Y]) &&
                                             (cutaway ||
                                              !(cutaway_at
                                                (view_x, view_y + 1, view_z)))) {
@@ -589,8 +592,11 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                          * lower right, and we are cutawayed or
                                          * it is cutawayed, then don't render
                                          * our right face. */
-                                        if (map_opaque_at(map, map_x + 1, map_y)
-                                            && in_fov(map_x + 1, map_y) &&
+                                        nview[X] = view_x + 1;
+                                        nview[Y] = view_y;
+                                        view_to_map(nview, nmap);
+                                        if (map_opaque_at(map, nmap[X], nmap[Y])
+                                            && in_fov(nmap[X], nmap[Y]) &&
                                             (cutaway ||
                                              !(cutaway_at
                                                (view_x + 1, view_y, view_z)))) {
