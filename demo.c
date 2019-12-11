@@ -463,11 +463,22 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
+static bool skipface(SDL_Surface *map, point_t nview, bool cutaway)
+{
+        point_t nmap;
+        view_to_map(nview, nmap);
+        return (map_opaque_at(map, nmap[X], nmap[Y])
+                && in_fov(nmap[X], nmap[Y]) &&
+                (cutaway ||
+                 !(cutaway_at
+                   (nview[X], nview[Y], nview[Z]))));
+}
+
 static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                        SDL_Texture ** textures, bool transparency, int view_z)
 {
         SDL_Rect src, dst;
-        point_t nview, nmap;
+        point_t nview;
 
         src.x = 0;
         src.y = 0;
@@ -573,35 +584,17 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         }
 
                                         /* Don't blit faces that overlap faces
-                                         * behind them. It's inefficient and
-                                         * when transparency is applied it
-                                         * looks chaotic.  */
+                                         * behind them. */
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
-                                        view_to_map(nview, nmap);
-                                        if (map_opaque_at(map, nmap[X], nmap[Y])
-                                            && in_fov(nmap[X], nmap[Y]) &&
-                                            (cutaway ||
-                                             !(cutaway_at
-                                               (view_x, view_y + 1, view_z)))) {
-                                                flags |=
-                                                    MODEL_RENDER_FLAG_SKIPLEFT;
+                                        if (skipface(map, nview, cutaway)) {
+                                                flags |= MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
 
-                                        /* If a tall model is in fov to our
-                                         * lower right, and we are cutawayed or
-                                         * it is cutawayed, then don't render
-                                         * our right face. */
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
-                                        view_to_map(nview, nmap);
-                                        if (map_opaque_at(map, nmap[X], nmap[Y])
-                                            && in_fov(nmap[X], nmap[Y]) &&
-                                            (cutaway ||
-                                             !(cutaway_at
-                                               (view_x + 1, view_y, view_z)))) {
-                                                flags |=
-                                                    MODEL_RENDER_FLAG_SKIPRIGHT;
+                                        if (skipface(map, nview, cutaway)) {
+                                                flags |= MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
 
                                         if (pixel == PIXEL_VALUE_WALL) {
