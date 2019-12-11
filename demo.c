@@ -425,11 +425,13 @@ static int blocks_fov(int view_x, int view_y, int view_z, int screen_h)
         return 0;
 }
 
-static bool cutaway_at(int map_x, int map_y, int view_z)
+static bool cutaway_at(int view_x, int view_y, int view_z)
 {
         int margin = view_z > cursor[Z] ? 2 : 1;
-        return (between(map_x, cursor[X] - margin, cursor[X] + 6 + view_z) &&
-                between(map_y, cursor[Y] - margin, cursor[Y] + 6 + view_z));
+        int cam_x = view_to_camera_x(view_x);
+        int cam_y = view_to_camera_y(view_y);
+        return (between(cam_x, -margin, 6 + view_z) &&
+                between(cam_y, -margin, 6 + view_z));
 }
 
 static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
@@ -506,7 +508,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
 
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
-                                bool cutaway = cutaway_at(map_x, map_y, view_z);
+                                bool cutaway = cutaway_at(view_x, view_y, view_z);
                                 if (cutaway && view_z > cursor[Z]) {
                                         continue;
                                 }
@@ -578,7 +580,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                                       map_y + 1) &&
                                             (cutaway ||
                                              !(cutaway_at
-                                               (map_x, map_y + 1, view_z)))) {
+                                               (view_x, view_y + 1, view_z)))) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
@@ -591,7 +593,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                             && in_fov(map_x + 1, map_y) &&
                                             (cutaway ||
                                              !(cutaway_at
-                                               (map_x + 1, map_y, view_z)))) {
+                                               (view_x + 1, view_y, view_z)))) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
