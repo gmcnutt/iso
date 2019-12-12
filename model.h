@@ -31,6 +31,7 @@ typedef struct {
  *
  * Set up the textures, offsets and tile_h fields.
  */
-void model_init(model_t * model, SDL_Texture ** textures, const size_t * texture_indices, int tile_h);
+void model_init(model_t * model, SDL_Texture ** textures,
+                const size_t * texture_indices, int tile_h);
 
 #endif

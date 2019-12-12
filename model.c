@@ -4,7 +4,8 @@
  * XXX: this could be done as a preprocessing step that generates a header
  * file with static declarations of all the model data.
  */
-void model_init(model_t * model, SDL_Texture ** textures, const size_t * texture_indices, int tile_h)
+void model_init(model_t * model, SDL_Texture ** textures,
+                const size_t * texture_indices, int tile_h)
 {
         /* Store the textures and their sizes. */
         for (size_t i = 0; i < N_MODEL_FACES; i++) {

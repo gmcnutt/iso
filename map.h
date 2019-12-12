@@ -15,6 +15,20 @@
 typedef uint32_t pixel_t;
 typedef SDL_Surface map_t;
 
+enum {
+        PIXEL_VALUE_TREE = 0x004001ff,
+        PIXEL_VALUE_SHRUB = 0x008000ff,
+        PIXEL_VALUE_GRASS = 0x00ff00ff,
+        PIXEL_VALUE_FLOOR = 0x0000f0ff,
+        PIXEL_VALUE_WALL = 0xffffffff
+};
+
+enum {
+        PIXEL_MASK_OPAQUE = 0x00000100, /* blue bit 0 */
+        PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
+};
+
+
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
 #define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
 #define map_contains(m, x, y) \

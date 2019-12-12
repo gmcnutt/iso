@@ -36,19 +36,6 @@ enum {
 };
 
 enum {
-        PIXEL_VALUE_TREE = 0x004001ff,
-        PIXEL_VALUE_SHRUB = 0x008000ff,
-        PIXEL_VALUE_GRASS = 0x00ff00ff,
-        PIXEL_VALUE_FLOOR = 0x0000f0ff,
-        PIXEL_VALUE_WALL = 0xffffffff
-};
-
-enum {
-        PIXEL_MASK_OPAQUE = 0x00000100, /* blue bit 0 */
-        PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
-};
-
-enum {
         MAP_FLOOR1,
         MAP_FLOOR2,
         N_MAPS
@@ -394,7 +381,8 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
 
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
-                                bool cutaway = cutaway_at(vloc, session->cursor);
+                                bool cutaway =
+                                    cutaway_at(vloc, session->cursor);
                                 if (cutaway && view_z > session->cursor[Z]) {
                                         continue;
                                 }
@@ -459,14 +447,18 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                          * behind them. */
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
-                                        if (skipface(map, nview, session->cursor, cutaway)) {
+                                        if (skipface
+                                            (map, nview, session->cursor,
+                                             cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
 
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
-                                        if (skipface(map, nview, session->cursor, cutaway)) {
+                                        if (skipface
+                                            (map, nview, session->cursor,
+                                             cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
@@ -520,7 +512,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                         break;
                 }
                 int map_z = i * MAP_Z_SEPARATION;
-                map_render(map, renderer, textures, session, map_z - session->cursor[Z]);
+                map_render(map, renderer, textures, session,
+                           map_z - session->cursor[Z]);
         }
 
         /* Paint the grid */
@@ -567,7 +560,7 @@ static SDL_Texture *load_texture(SDL_Renderer * renderer, const char *filename)
 /**
  * Handle button clicks.
  */
-void on_mouse_button(SDL_MouseButtonEvent * event, session_t *session)
+void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
 {
         point_t view = { 0, 0, 0 };
         view[X] = screen_to_view_x(event->x, event->y);
@@ -680,7 +673,8 @@ int main(int argc, char **argv)
 
         /* Setup the models */
         for (size_t i = 0; i < N_MODELS; i++) {
-                model_init(&models[i], textures, texture_indices[i], TILE_HEIGHT);
+                model_init(&models[i], textures, texture_indices[i],
+                           TILE_HEIGHT);
         }
 
         if (!
