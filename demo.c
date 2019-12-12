@@ -11,6 +11,7 @@
 typedef uint32_t pixel_t;
 typedef int point_t[3];
 typedef int matrix_t[2][2];
+typedef SDL_Surface map_t;
 
 enum {
         MODEL_RENDER_FLAG_TRANSPARENT = 1,
@@ -120,6 +121,7 @@ typedef struct {
 #define between_inc(x, l, r) (((l) <= (x)) && (x) <= (r))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
+
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
 #define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
 #define map_contains(m, x, y) \
@@ -131,6 +133,7 @@ typedef struct {
 #define map_right(m) ((m)->w - 1)
 #define map_top(m) 0
 #define map_bottom(m) ((m)->h - 1)
+#define map_free(m) (SDL_FreeSurface(m))
 
 static const char *texture_files[] = {
         "grass.png",
@@ -167,7 +170,7 @@ static point_t cursor = { 0 };
 static rotation_t camera_rotation = ROTATE_0;
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
-static SDL_Surface *maps[N_MAPS];
+static map_t *maps[N_MAPS];
 
 /**
  * XXX: this could be done as a preprocessing step that generates a header
@@ -199,7 +202,7 @@ static void model_setup(model_t * model, SDL_Texture ** textures,
 }
 
 
-static inline pixel_t map_get_pixel(SDL_Surface * map, size_t x, size_t y)
+static inline pixel_t map_get_pixel(map_t * map, size_t x, size_t y)
 {
         /* The pitch is the length of a row of pixels in bytes. Find the first
          * byte of the desired pixel then cast it to an RGBA 32 bit value to
@@ -211,7 +214,7 @@ static inline pixel_t map_get_pixel(SDL_Surface * map, size_t x, size_t y)
         return *pixelptr;
 }
 
-static SDL_Surface *get_map_surface(const char *filename)
+static map_t *map_from_image(const char *filename)
 {
         SDL_Surface *surface;
 
@@ -239,7 +242,7 @@ static SDL_Surface *get_map_surface(const char *filename)
         return surface;
 }
 
-static void setup_fov(SDL_Surface *map)
+static void setup_fov(map_t *map)
 {
         for (size_t y = 0, index = 0; y < map_h(map); y++) {
                 for (size_t x = 0; x < map_w(map); x++, index++) {
@@ -393,12 +396,12 @@ static inline void map_to_view(point_t l, point_t r)
         l[Y] += VIEW_H / 2;
 }
 
-static inline size_t map_xy_to_index(SDL_Surface *map, size_t map_x, size_t map_y)
+static inline size_t map_xy_to_index(map_t *map, size_t map_x, size_t map_y)
 {
         return map_y * map_w(map) + map_x;
 }
 
-static inline int in_fov(SDL_Surface *map, int map_x, int map_y)
+static inline int in_fov(map_t *map, int map_x, int map_y)
 {
         return fov_map.vis[map_x + map_y * map_w(map)];
 }
@@ -476,7 +479,7 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
-static bool skipface(SDL_Surface *map, point_t nview, bool cutaway)
+static bool skipface(map_t *map, point_t nview, bool cutaway)
 {
         point_t nmap;
         view_to_map(nview, nmap);
@@ -487,7 +490,7 @@ static bool skipface(SDL_Surface *map, point_t nview, bool cutaway)
                    (nview[X], nview[Y], nview[Z]))));
 }
 
-static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
+static void map_render(map_t * map, SDL_Renderer * renderer,
                        SDL_Texture ** textures, bool transparency, int view_z)
 {
         SDL_Rect src, dst;
@@ -709,7 +712,7 @@ void on_mouse_button(SDL_MouseButtonEvent * event)
                map[X], map[Y], view_rendered_at(view[X], view[Y]) ? 't' : 'f');
 }
 
-static void move_cursor(SDL_Surface *map, int dx, int dy)
+static void move_cursor(map_t *map, int dx, int dy)
 {
         point_t dir = {dx, dy, 0}, newcursor;
         rotate(dir, camera_rotation);
@@ -724,7 +727,7 @@ static void move_cursor(SDL_Surface *map, int dx, int dy)
 /**
  * Handle key presses.
  */
-void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency, SDL_Surface *map)
+void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency, map_t *map)
 {
         switch (event->keysym.sym) {
         case SDLK_LEFT:
@@ -809,12 +812,12 @@ int main(int argc, char **argv)
 
         if (!
             (maps[MAP_FLOOR1] =
-             get_map_surface(args.filename ? args.filename : "map.png"))) {
+             map_from_image(args.filename ? args.filename : "map.png"))) {
                 goto destroy_textures;
         }
 
         if (args.filename_l2) {
-                if (!(maps[MAP_FLOOR2] = get_map_surface(args.filename_l2))) {
+                if (!(maps[MAP_FLOOR2] = map_from_image(args.filename_l2))) {
                         goto destroy_maps;
                 }
                 if ((map_w(maps[MAP_FLOOR1]) != map_w(maps[MAP_FLOOR2])) ||
@@ -882,7 +885,7 @@ int main(int argc, char **argv)
 destroy_maps:
         for (int i = 0; i < N_MAPS; i++) {
                 if (maps[i]) {
-                        SDL_FreeSurface(maps[i]);
+                        map_free(maps[i]);
                 }
         }
 
