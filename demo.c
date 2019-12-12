@@ -87,7 +87,6 @@ typedef struct {
          * would normally be placed */
         SDL_Rect offsets[N_MODEL_FACES];
 
-        size_t screen_h;        /* total height in pixels */
         size_t tile_h;          /* total height in tiles */
 } model_t;
 
@@ -183,10 +182,10 @@ static void model_setup(model_t * model, SDL_Texture ** textures,
         model->offsets[MODEL_FACE_TOP].y =
             (model->offsets[MODEL_FACE_LEFT].y +
              model->offsets[MODEL_FACE_TOP].h / 2);
-        model->screen_h =
+        int screen_h =
             model->offsets[MODEL_FACE_LEFT].h +
             model->offsets[MODEL_FACE_TOP].h / 2;
-        model->tile_h = model->screen_h / TILE_HEIGHT;
+        model->tile_h = screen_h / TILE_HEIGHT;
 }
 
 
@@ -323,7 +322,7 @@ static inline int screen_to_view_y(int screen_x, int screen_y)
                      (float)screen_x / (float)TILE_WIDTH);
 }
 
-static inline int view_to_screen_x(int view_x, int view_y, int view_z)
+static inline int view_to_screen_x(int view_x, int view_y)
 {
         return (view_x - view_y) * TILE_WIDTH_HALF + VIEW_OFFSET;
 }
@@ -415,17 +414,15 @@ static inline void view_clear_rendered()
         memset(rendered, 0, sizeof (rendered));
 }
 
-static int blocks_fov(int view_x, int view_y, int view_z, int screen_h)
+static int blocks_fov(int view_x, int view_y, int tile_h)
 {
-        int vdist = screen_h / TILE_HEIGHT;
-
-        while (vdist && view_x > 0 && view_y > 0) {
+        while (tile_h && view_x > 0 && view_y > 0) {
                 if (view_rendered_at(view_x, view_y)) {
                         return 1;
                 }
                 view_x--;
                 view_y--;
-                vdist--;
+                tile_h--;
         }
 
         return 0;
@@ -459,7 +456,7 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
                 SDL_Rect dst;
                 dst.w = model->offsets[j].w;
                 dst.h = model->offsets[j].h;
-                dst.x = view_to_screen_x(view_x, view_y, view_z) + offset->x;
+                dst.x = view_to_screen_x(view_x, view_y) + offset->x;
                 dst.y = view_to_screen_y(view_x, view_y, view_z) - offset->y;
                 Uint8 alpha =
                     (flags & MODEL_RENDER_FLAG_TRANSPARENT) ? 128 : 255;
@@ -469,15 +466,13 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
-static bool skipface(SDL_Surface *map, point_t nview, bool cutaway)
+static bool skipface(SDL_Surface * map, point_t nview, bool cutaway)
 {
         point_t nmap;
         view_to_map(nview, nmap);
         return (map_opaque_at(map, nmap[X], nmap[Y])
                 && in_fov(nmap[X], nmap[Y]) &&
-                (cutaway ||
-                 !(cutaway_at
-                   (nview[X], nview[Y], nview[Z]))));
+                (cutaway || !(cutaway_at(nview[X], nview[Y], nview[Z]))));
 }
 
 static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
@@ -526,7 +521,8 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
 
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
-                                bool cutaway = cutaway_at(view_x, view_y, view_z);
+                                bool cutaway =
+                                    cutaway_at(view_x, view_y, view_z);
                                 if (cutaway && view_z > cursor[Z]) {
                                         continue;
                                 }
@@ -535,8 +531,8 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
                                         if (transparency &&
-                                            blocks_fov(view_x, view_y, view_z,
-                                                       model->screen_h)) {
+                                            blocks_fov(view_x, view_y,
+                                                       model->tile_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
@@ -546,8 +542,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         break;
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
-                                            view_to_screen_x(view_x, view_y,
-                                                             view_z);
+                                            view_to_screen_x(view_x, view_y);
                                         dst.y =
                                             view_to_screen_y(view_x, view_y,
                                                              view_z);
@@ -556,8 +551,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
 
 
                                         if (transparency &&
-                                            blocks_fov(view_x, view_y, view_z,
-                                                       1)) {
+                                            blocks_fov(view_x, view_y, 1)) {
                                                 SDL_SetTextureAlphaMod(textures
                                                                        [TEXTURE_GRASS],
                                                                        128);
@@ -583,8 +577,8 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         }
 
                                         if (transparency &&
-                                            blocks_fov(view_x, view_y, view_z,
-                                                       model->screen_h)) {
+                                            blocks_fov(view_x, view_y,
+                                                       model->tile_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
@@ -594,13 +588,15 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
                                         if (skipface(map, nview, cutaway)) {
-                                                flags |= MODEL_RENDER_FLAG_SKIPLEFT;
+                                                flags |=
+                                                    MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
 
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
                                         if (skipface(map, nview, cutaway)) {
-                                                flags |= MODEL_RENDER_FLAG_SKIPRIGHT;
+                                                flags |=
+                                                    MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
 
                                         if (pixel == PIXEL_VALUE_WALL) {
@@ -711,8 +707,7 @@ void on_mouse_button(SDL_MouseButtonEvent * event)
 
 static void move_cursor(int dx, int dy)
 {
-        printf("move_cursor(%d, %d)\n", dx, dy);
-        point_t dir = {dx, dy, 0}, newcursor;
+        point_t dir = { dx, dy, 0 }, newcursor;
         rotate(dir, camera_rotation);
         point_copy(cursor, newcursor);
         translate(newcursor, dir);
@@ -728,7 +723,6 @@ static void move_cursor(int dx, int dy)
  */
 void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
 {
-        printf("%d\n", event->keysym.sym);
         switch (event->keysym.sym) {
         case SDLK_LEFT:
                 move_cursor(-1, 0);
