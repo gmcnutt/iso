@@ -10,6 +10,7 @@
 #include "map.h"
 #include "model.h"
 #include "point.h"
+#include "view.h"
 
 enum {
         MODEL_RENDER_FLAG_TRANSPARENT = 1,
@@ -36,9 +37,13 @@ enum {
 };
 
 enum {
-        MAP_FLOOR1,
-        MAP_FLOOR2,
-        N_MAPS
+        DIR_XLEFT,
+        DIR_XRIGHT,
+        DIR_YUP,
+        DIR_YDOWN,
+        DIR_ZUP,
+        DIR_ZDOWN,
+        N_DIR
 };
 
 struct args {
@@ -51,29 +56,17 @@ struct args {
 };
 
 typedef struct {
-        volume_t *volume;
-        rotation_t rotation;
-        point_t cursor;
-} view_t;
-
-typedef struct {
         view_t view;
+        mapstack_t maps;
         bool transparency;
 } session_t;
 
 #define FPS 60
-#define MAP_Z_SEPARATION 5
 #define TILE_HEIGHT 18
 #define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 #define TILE_WIDTH 36
 #define TILE_WIDTH_HALF (TILE_WIDTH / 2)
 #define TICK_PER_FRAME (1000 / FPS)
-#define VIEW_H 35
-#define VIEW_W 35
-/* The isometric view is rotated 45 degrees clockwise. This means the tile at
- * the lower left corner of the view (0, VIEW_H) should be at the left of the
- * screen. */
-#define VIEW_OFFSET ((VIEW_H - 1) * TILE_WIDTH_HALF)
 
 #define between(x, l, r) (((l) < (x)) && (x) < (r))
 #define between_inc(x, l, r) (((l) <= (x)) && (x) <= (r))
@@ -103,8 +96,6 @@ static const int FOV_RAD = 32;
 static rotation_t camera_rotation = ROTATE_0;
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
-
-static map_t *maps[N_MAPS];
 
 static void setup_fov(map_t * map)
 {
@@ -233,6 +224,7 @@ static inline void view_to_map(point_t view, point_t map, point_t cursor)
         map[Y] += cursor[Y];
 }
 
+
 static inline void map_to_camera(point_t left, point_t right, point_t cursor)
 {
         left[X] = (right[X] - (right[Z] - cursor[Z])) - cursor[X];
@@ -354,7 +346,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                 for (int view_x = 0; view_x < VIEW_W; view_x++) {
                         point_t vloc = { view_x, view_y, view_z };
                         point_t mloc;
-                        view_to_map(vloc, mloc, session->cursor);
+                        view_to_map(vloc, mloc, session->view.cursor);
                         int map_y = mloc[Y];
                         int map_x = mloc[X];
 
@@ -364,9 +356,9 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                         size_t map_index = map_xy_to_index(map, map_x, map_y);
 
                         /* Draw the cursor */
-                        if (view_z == session->cursor[Z] &&
-                            map_x == session->cursor[X] &&
-                            map_y == session->cursor[Y]) {
+                        if (view_z == session->view.cursor[Z] &&
+                            map_x == session->view.cursor[X] &&
+                            map_y == session->view.cursor[Y]) {
                                 model_render(renderer, &models[MODEL_TALL],
                                              view_x, view_y, view_z, 255, 128,
                                              64, 0);
@@ -387,8 +379,8 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
                                 bool cutaway =
-                                    cutaway_at(vloc, session->cursor);
-                                if (cutaway && view_z > session->cursor[Z]) {
+                                    cutaway_at(vloc, session->view.cursor);
+                                if (cutaway && view_z > session->view.cursor[Z]) {
                                         continue;
                                 }
 
@@ -453,7 +445,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
                                         if (skipface
-                                            (map, nview, session->cursor,
+                                            (map, nview, session->view.cursor,
                                              cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
@@ -462,7 +454,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
                                         if (skipface
-                                            (map, nview, session->cursor,
+                                            (map, nview, session->view.cursor,
                                              cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
@@ -508,17 +500,14 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         view_clear_rendered();
 
         /* Recompute fov based on player's position */
-        fov(&fov_map, session->cursor[X], session->cursor[Y], FOV_RAD);
+        fov(&fov_map, session->view.cursor[X], session->view.cursor[Y], FOV_RAD);
 
         /* Render the maps in z order */
-        for (int i = 0; i < N_MAPS; i++) {
-                map_t *map = maps[i];
-                if (!map) {
-                        break;
-                }
-                int map_z = i * MAP_Z_SEPARATION;
+        for (int i = 0; i < session->maps.n_maps; i++) {
+                map_t *map = session->maps.maps[i];
+                int map_z = i * VIEW_Z_MULT;
                 map_render(map, renderer, textures, session,
-                           map_z - session->cursor[Z]);
+                           map_z - session->view.cursor[Z]);
         }
 
         /* Paint the grid */
@@ -527,7 +516,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 
         /* Paint a red square for a cursor position */
         point_t view;
-        map_to_view(view, session->cursor, session->cursor);
+        map_to_view(view, session->view.cursor, session->view.cursor);
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
         iso_square(renderer, VIEW_H, view[X], view[Y]);
 }
@@ -571,7 +560,7 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
         view[X] = screen_to_view_x(event->x, event->y);
         view[Y] = screen_to_view_y(event->x, event->y);
         point_t map = { 0, 0, 0 };
-        view_to_map(view, map, session->cursor);
+        view_to_map(view, map, session->view.cursor);
 
         printf("s(%d, %d) -> v(%d, %d) -> m(%d, %d) -> %c\n",
                event->x, event->y,
@@ -579,43 +568,39 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
                map[X], map[Y], view_rendered_at(view[X], view[Y]) ? 't' : 'f');
 }
 
-static void view_move_cursor(view_t *view, point_t direction)
-{
-        point_t cursor, map_t *map;
-        
-        point_copy_from(cursor, view->cursor);
-        rotate(direction, view->rotation);
-        translate(cursor, direction);
-        if ((map = volume_get_map_at(view->volume, cursor)) &&
-            map_passable_at_xy(map, cursor[X], cursor[Y])) {
-                point_copy_from(view->cursor, cursor);
-        }
-}
-
 /**
  * Handle key presses.
  */
 void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
 {
+        static const point_t directions[N_DIR] = {
+                {-1,  0,  0}, /* left */
+                { 1,  0,  0}, /* right */
+                { 0, -1,  0}, /* up */
+                { 0,  1,  0}, /* down */
+                { 0,  0,  1}, /* vert up */
+                { 0,  0, -1}  /* vert down */
+        };
+        
         printf("%d (0x%08x)\n", event->keysym.sym, event->keysym.sym);
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                view_move_cursor(session->view, {-1, 0, 0});
+                view_move_cursor(&session->view, directions[DIR_XLEFT]);
                 break;
         case SDLK_RIGHT:
-                move_cursor_horz(session->map, session->cursor, 1, 0);
+                view_move_cursor(&session->view, directions[DIR_XRIGHT]);
                 break;
         case SDLK_UP:
-                move_cursor_horz(session->map, session->cursor, 0, -1);
+                view_move_cursor(&session->view, directions[DIR_YUP]);
                 break;
         case SDLK_DOWN:
-                move_cursor_horz(session->map, session->cursor, 0, 1);
+                view_move_cursor(&session->view, directions[DIR_YDOWN]);
                 break;
         case SDLK_PAGEUP:
-                move_cursor_vert(session->maps, session->cursor, 1);
+                view_move_cursor(&session->view, directions[DIR_ZUP]);
                 break;
         case SDLK_PAGEDOWN:
-                move_cursor_vert(session->maps, session->cursor, -1);
+                view_move_cursor(&session->view, directions[DIR_ZDOWN]);
                 break;
         case SDLK_q:
                 *quit = 1;
@@ -646,6 +631,7 @@ int main(int argc, char **argv)
         Uint32 start_ticks, end_ticks, frames = 0, pre_tick;
         struct args args;
 
+        memset(&session, 0, sizeof(session));
 
         parse_args(argc, argv, &args);
 
@@ -689,32 +675,35 @@ int main(int argc, char **argv)
                            TILE_HEIGHT);
         }
 
-        if (!
-            (maps[MAP_FLOOR1] =
-             map_from_image(args.filename ? args.filename : "map.png"))) {
+        map_t *map;
+        if (!(map = map_from_image(args.filename ? args.filename : "map.png"))) {
                 goto destroy_textures;
         }
 
-        session.map = maps[MAP_FLOOR1];
+        mapstack_add(&session.maps, map);
 
         if (args.filename_l2) {
-                if (!(maps[MAP_FLOOR2] = map_from_image(args.filename_l2))) {
+                if (!(map = map_from_image(args.filename_l2))) {
                         goto destroy_maps;
                 }
-                if ((map_w(maps[MAP_FLOOR1]) != map_w(maps[MAP_FLOOR2])) ||
-                    (map_h(maps[MAP_FLOOR1]) != map_h(maps[MAP_FLOOR2]))) {
+                if ((map_w(map) != mapstack_w(&session.maps)) ||
+                    (map_h(map) != mapstack_h(&session.maps))) {
                         printf("Maps must be same size!\n");
                         goto destroy_maps;
                 }
+                mapstack_add(&session.maps, map);
         }
 
+        session.view.map = session.maps.maps[MAP_FLOOR1];
+        session.view.maps = &session.maps;
+
         /* Setup the fov map. */
-        fov_map.w = map_w(session.map);
-        fov_map.h = map_h(session.map);
+        fov_map.w = map_w(session.view.map);
+        fov_map.h = map_h(session.view.map);
         fov_map.opq = calloc(1, fov_map.w * fov_map.h);
         fov_map.vis = calloc(1, fov_map.w * fov_map.h);
         if (args.fov) {
-                setup_fov(maps[MAP_FLOOR1]);
+                setup_fov(session.view.map);
         }
 
         start_ticks = SDL_GetTicks();
@@ -763,8 +752,8 @@ int main(int argc, char **argv)
         }
 destroy_maps:
         for (int i = 0; i < N_MAPS; i++) {
-                if (maps[i]) {
-                        map_free(maps[i]);
+                if (session.maps.maps[i]) {
+                        map_free(session.maps.maps[i]);
                 }
         }
 

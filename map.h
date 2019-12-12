@@ -6,11 +6,11 @@
  * Copyright (c) 2019 Gordon McNutt
  */
 
-#ifndef __map_h__
-#define __map_h__
+#ifndef map_header
+#define map_header
 
 #include <SDL2/SDL.h>
-#include <stddef.h>
+#include <stdbool.h>
 
 typedef uint32_t pixel_t;
 typedef SDL_Surface map_t;
@@ -28,9 +28,23 @@ enum {
         PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
 };
 
+enum {
+        MAP_FLOOR1,
+        MAP_FLOOR2,
+        N_MAPS
+};
+
+typedef struct {
+        map_t *maps[N_MAPS];
+        int n_maps;
+        int w, h;
+} mapstack_t;
+
+#define mapstack_w(ms) ((ms)->w)
+#define mapstack_h(ms) ((ms)->h)
 
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
-#define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
+#define map_passable_at_xy(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
 #define map_contains(m, x, y) \
         (between_inc((x), map_left(m), map_right(m)) && \
          between_inc((y), map_top(m), map_bottom(m)))
@@ -41,6 +55,16 @@ enum {
 #define map_top(m) 0
 #define map_bottom(m) ((m)->h - 1)
 #define map_free(m) (SDL_FreeSurface(m))
+
+/**
+ * Get the map at index i, or NULL if none or out-of-bounds.
+ */
+map_t *mapstack_get(mapstack_t *ms, int i);
+
+/**
+ * Add a map to the stack.
+ */
+bool mapstack_add(mapstack_t *ms, map_t *map);
 
 /**
  * Get the pixel at the given map location.

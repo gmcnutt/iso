@@ -26,10 +26,10 @@ enum {
 };
 
 #define point_init(p) ((p) = {0, 0, 0})
-#define point_copy(f, t) do {\
-                (t)[X] = (f)[X];\
-                (t)[Y] = (f)[Y];\
-                (t)[Z] = (f)[Z];\
+#define point_copy(l, r) do {\
+                (l)[X] = (r)[X];\
+                (l)[Y] = (r)[Y];\
+                (l)[Z] = (r)[Z];\
         } while(0);
 
 
