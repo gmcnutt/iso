@@ -90,7 +90,6 @@ typedef struct {
         size_t tile_h;          /* total height in tiles */
 } model_t;
 
-
 #define point_init(p) ((p) = {0, 0, 0})
 #define point_copy(f, t) do {\
                 (t)[X] = (f)[X];\
@@ -99,8 +98,6 @@ typedef struct {
         } while(0);
 
 #define FPS 60
-#define MAP_H (map_surface->h)
-#define MAP_W (map_surface->w)
 #define TILE_HEIGHT 18
 #define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 #define TILE_WIDTH 36
@@ -119,7 +116,15 @@ typedef struct {
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
 #define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
-#define on_map(x, y) (between((x), 0, MAP_W) && between((y), 0, MAP_H))
+#define map_contains(m, x, y) \
+        (between_inc((x), map_left(m), map_right(m)) && \
+         between_inc((y), map_top(m), map_bottom(m)))
+#define map_h(m) ((m)->h)
+#define map_w(m) ((m)->w)
+#define map_left(m) 0
+#define map_right(m) ((m)->w - 1)
+#define map_top(m) 0
+#define map_bottom(m) ((m)->h - 1)
 
 static const char *texture_files[] = {
         "grass.png",
@@ -229,10 +234,10 @@ static SDL_Surface *get_map_surface(const char *filename)
         return surface;
 }
 
-static void setup_fov()
+static void setup_fov(SDL_Surface *map)
 {
-        for (size_t y = 0, index = 0; y < MAP_H; y++) {
-                for (size_t x = 0; x < MAP_W; x++, index++) {
+        for (size_t y = 0, index = 0; y < map_h(map); y++) {
+                for (size_t x = 0; x < map_w(map); x++, index++) {
                         if (map_opaque_at(map_surface, x, y)) {
                                 fov_map.opq[index] = 1;
                         }
@@ -383,14 +388,14 @@ static inline void map_to_view(point_t l, point_t r)
         l[Y] += VIEW_H / 2;
 }
 
-static inline size_t map_xy_to_index(size_t map_x, size_t map_y)
+static inline size_t map_xy_to_index(SDL_Surface *map, size_t map_x, size_t map_y)
 {
-        return map_y * MAP_W + map_x;
+        return map_y * map_w(map) + map_x;
 }
 
-static inline int in_fov(int map_x, int map_y)
+static inline int in_fov(SDL_Surface *map, int map_x, int map_y)
 {
-        return fov_map.vis[map_x + map_y * MAP_W];
+        return fov_map.vis[map_x + map_y * map_w(map)];
 }
 
 static inline int view_rendered_at(size_t view_x, size_t view_y)
@@ -466,13 +471,15 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
-static bool skipface(SDL_Surface * map, point_t nview, bool cutaway)
+static bool skipface(SDL_Surface *map, point_t nview, bool cutaway)
 {
         point_t nmap;
         view_to_map(nview, nmap);
         return (map_opaque_at(map, nmap[X], nmap[Y])
-                && in_fov(nmap[X], nmap[Y]) &&
-                (cutaway || !(cutaway_at(nview[X], nview[Y], nview[Z]))));
+                && in_fov(map, nmap[X], nmap[Y]) &&
+                (cutaway ||
+                 !(cutaway_at
+                   (nview[X], nview[Y], nview[Z]))));
 }
 
 static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
@@ -495,13 +502,10 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                         int map_y = mloc[Y];
                         int map_x = mloc[X];
 
-                        if (map_y < 0 || map_y >= MAP_H) {
+                        if (!(map_contains(map, map_x, map_y))) {
                                 continue;
                         }
-                        if (map_x < 0 || map_x >= MAP_W) {
-                                continue;
-                        }
-                        size_t map_index = map_xy_to_index(map_x, map_y);
+                        size_t map_index = map_xy_to_index(map, map_x, map_y);
                         if (view_z == cursor[Z] && map_x == cursor[X] &&
                             map_y == cursor[Y]) {
                                 model_render(renderer, &models[MODEL_TALL],
@@ -521,8 +525,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
 
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
-                                bool cutaway =
-                                    cutaway_at(view_x, view_y, view_z);
+                                bool cutaway = cutaway_at(view_x, view_y, view_z);
                                 if (cutaway && view_z > cursor[Z]) {
                                         continue;
                                 }
@@ -531,8 +534,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
                                         if (transparency &&
-                                            blocks_fov(view_x, view_y,
-                                                       model->tile_h)) {
+                                            blocks_fov(view_x, view_y, model->tile_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
@@ -542,7 +544,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         break;
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
-                                            view_to_screen_x(view_x, view_y);
+                                                view_to_screen_x(view_x, view_y);
                                         dst.y =
                                             view_to_screen_y(view_x, view_y,
                                                              view_z);
@@ -577,8 +579,7 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         }
 
                                         if (transparency &&
-                                            blocks_fov(view_x, view_y,
-                                                       model->tile_h)) {
+                                            blocks_fov(view_x, view_y, model->tile_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
@@ -588,15 +589,13 @@ static void map_render(SDL_Surface * map, SDL_Renderer * renderer,
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
                                         if (skipface(map, nview, cutaway)) {
-                                                flags |=
-                                                    MODEL_RENDER_FLAG_SKIPLEFT;
+                                                flags |= MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
 
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
                                         if (skipface(map, nview, cutaway)) {
-                                                flags |=
-                                                    MODEL_RENDER_FLAG_SKIPRIGHT;
+                                                flags |= MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
 
                                         if (pixel == PIXEL_VALUE_WALL) {
@@ -707,12 +706,11 @@ void on_mouse_button(SDL_MouseButtonEvent * event)
 
 static void move_cursor(int dx, int dy)
 {
-        point_t dir = { dx, dy, 0 }, newcursor;
+        point_t dir = {dx, dy, 0}, newcursor;
         rotate(dir, camera_rotation);
         point_copy(cursor, newcursor);
         translate(newcursor, dir);
-        if (between_inc(newcursor[X], 0, MAP_W - 1) &&
-            between_inc(newcursor[Y], 0, MAP_H - 1) &&
+        if (map_contains(map_surface, newcursor[X], newcursor[Y]) &&
             map_passable_at(map_surface, newcursor[X], newcursor[Y])) {
                 point_copy(newcursor, cursor);
         }
@@ -817,12 +815,12 @@ int main(int argc, char **argv)
         }
 
         /* Setup the fov map. */
-        fov_map.w = MAP_W;
-        fov_map.h = MAP_H;
+        fov_map.w = map_w(map_surface);
+        fov_map.h = map_h(map_surface);
         fov_map.opq = calloc(1, fov_map.w * fov_map.h);
         fov_map.vis = calloc(1, fov_map.w * fov_map.h);
         if (args.fov) {
-                setup_fov();
+                setup_fov(map_surface);
         }
 
         start_ticks = SDL_GetTicks();
