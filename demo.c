@@ -7,11 +7,9 @@
 
 #include "fov.h"
 #include "iso.h"
+#include "map.h"
 #include "model.h"
 #include "point.h"
-
-typedef uint32_t pixel_t;
-typedef SDL_Surface map_t;
 
 enum {
         MODEL_RENDER_FLAG_TRANSPARENT = 1,
@@ -90,19 +88,6 @@ typedef struct {
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-#define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
-#define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
-#define map_contains(m, x, y) \
-        (between_inc((x), map_left(m), map_right(m)) && \
-         between_inc((y), map_top(m), map_bottom(m)))
-#define map_h(m) ((m)->h)
-#define map_w(m) ((m)->w)
-#define map_left(m) 0
-#define map_right(m) ((m)->w - 1)
-#define map_top(m) 0
-#define map_bottom(m) ((m)->h - 1)
-#define map_free(m) (SDL_FreeSurface(m))
-
 static const char *texture_files[] = {
         "grass.png",
         "gray_left.png",
@@ -128,46 +113,6 @@ static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
 
 static map_t *maps[N_MAPS];
-
-static inline pixel_t map_get_pixel(map_t * map, size_t x, size_t y)
-{
-        /* The pitch is the length of a row of pixels in bytes. Find the first
-         * byte of the desired pixel then cast it to an RGBA 32 bit value to
-         * check it. */
-        size_t offset = (y * map->pitch + x * sizeof (pixel_t));
-        uint8_t *byteptr = (uint8_t *) map->pixels;
-        byteptr += offset;
-        uint32_t *pixelptr = (uint32_t *) byteptr;
-        return *pixelptr;
-}
-
-static map_t *map_from_image(const char *filename)
-{
-        SDL_Surface *surface;
-
-        /* Load the image file that has the map */
-        if (!(surface = IMG_Load(filename))) {
-                printf("%s:IMG_Load:%s\n", __FUNCTION__, SDL_GetError());
-                return NULL;
-        }
-
-        /* Make sure the pixels are in RGBA format, 8 bits per pixel */
-        if (surface->format->format != SDL_PIXELFORMAT_RGBA8888) {
-                SDL_Surface *tmp;
-                tmp =
-                    SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888,
-                                             0);
-                SDL_FreeSurface(surface);
-                surface = tmp;
-                if (!surface) {
-                        printf("%s:SDL_ConvertSurfaceFormat:%s\n", __FUNCTION__,
-                               SDL_GetError());
-                        return NULL;
-                }
-        }
-
-        return surface;
-}
 
 static void setup_fov(map_t * map)
 {
