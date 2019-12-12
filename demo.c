@@ -105,6 +105,7 @@ typedef struct {
         } while(0);
 
 #define FPS 60
+#define MAP_Z_SEPARATION 5
 #define TILE_HEIGHT 18
 #define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 #define TILE_WIDTH 36
@@ -170,6 +171,7 @@ static point_t cursor = { 0 };
 static rotation_t camera_rotation = ROTATE_0;
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
+
 static map_t *maps[N_MAPS];
 
 /**
@@ -242,7 +244,7 @@ static map_t *map_from_image(const char *filename)
         return surface;
 }
 
-static void setup_fov(map_t *map)
+static void setup_fov(map_t * map)
 {
         for (size_t y = 0, index = 0; y < map_h(map); y++) {
                 for (size_t x = 0; x < map_w(map); x++, index++) {
@@ -396,12 +398,12 @@ static inline void map_to_view(point_t l, point_t r)
         l[Y] += VIEW_H / 2;
 }
 
-static inline size_t map_xy_to_index(map_t *map, size_t map_x, size_t map_y)
+static inline size_t map_xy_to_index(map_t * map, size_t map_x, size_t map_y)
 {
         return map_y * map_w(map) + map_x;
 }
 
-static inline int in_fov(map_t *map, int map_x, int map_y)
+static inline int in_fov(map_t * map, int map_x, int map_y)
 {
         return fov_map.vis[map_x + map_y * map_w(map)];
 }
@@ -479,15 +481,13 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
-static bool skipface(map_t *map, point_t nview, bool cutaway)
+static bool skipface(map_t * map, point_t nview, bool cutaway)
 {
         point_t nmap;
         view_to_map(nview, nmap);
         return (map_opaque_at(map, nmap[X], nmap[Y])
                 && in_fov(map, nmap[X], nmap[Y]) &&
-                (cutaway ||
-                 !(cutaway_at
-                   (nview[X], nview[Y], nview[Z]))));
+                (cutaway || !(cutaway_at(nview[X], nview[Y], nview[Z]))));
 }
 
 static void map_render(map_t * map, SDL_Renderer * renderer,
@@ -533,7 +533,8 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
 
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
-                                bool cutaway = cutaway_at(view_x, view_y, view_z);
+                                bool cutaway =
+                                    cutaway_at(view_x, view_y, view_z);
                                 if (cutaway && view_z > cursor[Z]) {
                                         continue;
                                 }
@@ -542,7 +543,8 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
                                         if (transparency &&
-                                            blocks_fov(view_x, view_y, model->tile_h)) {
+                                            blocks_fov(view_x, view_y,
+                                                       model->tile_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
@@ -552,7 +554,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         break;
                                 case PIXEL_VALUE_GRASS:
                                         dst.x =
-                                                view_to_screen_x(view_x, view_y);
+                                            view_to_screen_x(view_x, view_y);
                                         dst.y =
                                             view_to_screen_y(view_x, view_y,
                                                              view_z);
@@ -587,7 +589,8 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         }
 
                                         if (transparency &&
-                                            blocks_fov(view_x, view_y, model->tile_h)) {
+                                            blocks_fov(view_x, view_y,
+                                                       model->tile_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
@@ -597,13 +600,15 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
                                         if (skipface(map, nview, cutaway)) {
-                                                flags |= MODEL_RENDER_FLAG_SKIPLEFT;
+                                                flags |=
+                                                    MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
 
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
                                         if (skipface(map, nview, cutaway)) {
-                                                flags |= MODEL_RENDER_FLAG_SKIPRIGHT;
+                                                flags |=
+                                                    MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
 
                                         if (pixel == PIXEL_VALUE_WALL) {
@@ -649,9 +654,13 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         fov(&fov_map, cursor[X], cursor[Y], FOV_RAD);
 
         /* Render the main surface map */
-        map_render(maps[MAP_FLOOR1], renderer, textures, transparency, 0);
-        if (maps[MAP_FLOOR2]) {
-                map_render(maps[MAP_FLOOR2], renderer, textures, transparency, 5);
+        for (int i = 0; i < N_MAPS; i++) {
+                map_t *map = maps[i];
+                if (!map) {
+                        break;
+                }
+                int view_z = i * MAP_Z_SEPARATION;
+                map_render(map, renderer, textures, transparency, view_z);
         }
 
         /* Paint the grid */
@@ -712,9 +721,9 @@ void on_mouse_button(SDL_MouseButtonEvent * event)
                map[X], map[Y], view_rendered_at(view[X], view[Y]) ? 't' : 'f');
 }
 
-static void move_cursor(map_t *map, int dx, int dy)
+static void move_cursor(map_t * map, int dx, int dy)
 {
-        point_t dir = {dx, dy, 0}, newcursor;
+        point_t dir = { dx, dy, 0 }, newcursor;
         rotate(dir, camera_rotation);
         point_copy(cursor, newcursor);
         translate(newcursor, dir);
@@ -727,7 +736,8 @@ static void move_cursor(map_t *map, int dx, int dy)
 /**
  * Handle key presses.
  */
-void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency, map_t *map)
+void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency,
+                map_t * map)
 {
         switch (event->keysym.sym) {
         case SDLK_LEFT:
