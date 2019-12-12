@@ -97,6 +97,11 @@ typedef struct {
         size_t tile_h;          /* total height in tiles */
 } model_t;
 
+typedef struct {
+        bool transparency;
+        map_t *map;
+} session_t;
+
 #define point_init(p) ((p) = {0, 0, 0})
 #define point_copy(f, t) do {\
                 (t)[X] = (f)[X];\
@@ -491,7 +496,7 @@ static bool skipface(map_t * map, point_t nview, bool cutaway)
 }
 
 static void map_render(map_t * map, SDL_Renderer * renderer,
-                       SDL_Texture ** textures, bool transparency, int view_z)
+                       SDL_Texture ** textures, session_t * session, int view_z)
 {
         SDL_Rect src, dst;
         point_t nview;
@@ -542,7 +547,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                 switch (pixel) {
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
-                                        if (transparency &&
+                                        if (session->transparency &&
                                             blocks_fov(view_x, view_y,
                                                        model->tile_h)) {
                                                 flags |=
@@ -562,7 +567,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         dst.h = TILE_HEIGHT;
 
 
-                                        if (transparency &&
+                                        if (session->transparency &&
                                             blocks_fov(view_x, view_y, 1)) {
                                                 SDL_SetTextureAlphaMod(textures
                                                                        [TEXTURE_GRASS],
@@ -588,7 +593,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                                 model = &models[MODEL_TALL];
                                         }
 
-                                        if (transparency &&
+                                        if (session->transparency &&
                                             blocks_fov(view_x, view_y,
                                                        model->tile_h)) {
                                                 flags |=
@@ -645,7 +650,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
 }
 
 static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
-                            bool transparency)
+                            session_t * session)
 {
         /* Clear the rendered buffer */
         view_clear_rendered();
@@ -653,14 +658,14 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         /* Recompute fov based on player's position */
         fov(&fov_map, cursor[X], cursor[Y], FOV_RAD);
 
-        /* Render the main surface map */
+        /* Render the maps in z order */
         for (int i = 0; i < N_MAPS; i++) {
                 map_t *map = maps[i];
                 if (!map) {
                         break;
                 }
-                int view_z = i * MAP_Z_SEPARATION;
-                map_render(map, renderer, textures, transparency, view_z);
+                int map_z = i * MAP_Z_SEPARATION;
+                map_render(map, renderer, textures, session, map_z - cursor[Z]);
         }
 
         /* Paint the grid */
@@ -675,10 +680,10 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
 }
 
 static void render(SDL_Renderer * renderer, SDL_Texture ** textures,
-                   bool transparency)
+                   session_t * session)
 {
         clear_screen(renderer);
-        render_iso_test(renderer, textures, transparency);
+        render_iso_test(renderer, textures, session);
         SDL_RenderPresent(renderer);
 }
 
@@ -736,27 +741,27 @@ static void move_cursor(map_t * map, int dx, int dy)
 /**
  * Handle key presses.
  */
-void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency,
-                map_t * map)
+void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
 {
+        printf("%d (0x%08x)\n", event->keysym.sym, event->keysym.sym);
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                move_cursor(map, -1, 0);
+                move_cursor(session->map, -1, 0);
                 break;
         case SDLK_RIGHT:
-                move_cursor(map, 1, 0);
+                move_cursor(session->map, 1, 0);
                 break;
         case SDLK_UP:
-                move_cursor(map, 0, -1);
+                move_cursor(session->map, 0, -1);
                 break;
         case SDLK_DOWN:
-                move_cursor(map, 0, 1);
+                move_cursor(session->map, 0, 1);
                 break;
         case SDLK_q:
                 *quit = 1;
                 break;
         case SDLK_t:
-                *transparency = !(*transparency);
+                session->transparency = !(session->transparency);
                 break;
         case SDLK_PERIOD:
                 camera_rotation = (camera_rotation + 1) % N_ROTATIONS;
@@ -775,6 +780,7 @@ int main(int argc, char **argv)
         SDL_Window *window = NULL;
         SDL_Renderer *renderer = NULL;
         SDL_Texture *textures[N_TEXTURES] = { 0 };
+        session_t session;
 
         int done = 0;
         Uint32 start_ticks, end_ticks, frames = 0, pre_tick;
@@ -782,6 +788,8 @@ int main(int argc, char **argv)
 
 
         parse_args(argc, argv, &args);
+
+        session.transparency = args.transparency;
 
         /* Init SDL */
         if (SDL_Init(SDL_INIT_VIDEO)) {
@@ -826,6 +834,8 @@ int main(int argc, char **argv)
                 goto destroy_textures;
         }
 
+        session.map = maps[MAP_FLOOR1];
+
         if (args.filename_l2) {
                 if (!(maps[MAP_FLOOR2] = map_from_image(args.filename_l2))) {
                         goto destroy_maps;
@@ -838,8 +848,8 @@ int main(int argc, char **argv)
         }
 
         /* Setup the fov map. */
-        fov_map.w = map_w(maps[MAP_FLOOR1]);
-        fov_map.h = map_h(maps[MAP_FLOOR2]);
+        fov_map.w = map_w(session.map);
+        fov_map.h = map_h(session.map);
         fov_map.opq = calloc(1, fov_map.w * fov_map.h);
         fov_map.vis = calloc(1, fov_map.w * fov_map.h);
         if (args.fov) {
@@ -856,13 +866,11 @@ int main(int argc, char **argv)
                                 done = 1;
                                 break;
                         case SDL_KEYDOWN:
-                                on_keydown(&event.key, &done,
-                                           &args.transparency,
-                                           maps[MAP_FLOOR1]);
+                                on_keydown(&event.key, &done, &session);
                                 break;
                         case SDL_WINDOWEVENT:
                                 frames++;
-                                render(renderer, textures, args.transparency);
+                                render(renderer, textures, &session);
                                 break;
                         case SDL_MOUSEBUTTONDOWN:
                                 on_mouse_button(&event.button);
@@ -872,7 +880,7 @@ int main(int argc, char **argv)
                 }
 
                 frames++;
-                render(renderer, textures, args.transparency);
+                render(renderer, textures, &session);
 
                 if (args.delay) {
                         Uint32 post_tick = SDL_GetTicks();
