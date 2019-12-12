@@ -71,6 +71,12 @@ enum {
         N_DIMENSIONS
 };
 
+enum {
+        MAP_FLOOR1,
+        MAP_FLOOR2,
+        N_MAPS
+};
+
 struct args {
         char *filename;
         char *filename_l2;
@@ -154,8 +160,6 @@ static const matrix_t rotations[N_ROTATIONS] = {
          {1, 0}}
 };
 
-static SDL_Surface *map_surface = NULL; /* the map image */
-static SDL_Surface *map_l2 = NULL;      /* optional second level map */
 static fov_map_t fov_map;
 static const int FOV_RAD = 32;
 static point_t cursor = { 0 };
@@ -163,6 +167,7 @@ static point_t cursor = { 0 };
 static rotation_t camera_rotation = ROTATE_0;
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
+static SDL_Surface *maps[N_MAPS];
 
 /**
  * XXX: this could be done as a preprocessing step that generates a header
@@ -238,7 +243,7 @@ static void setup_fov(SDL_Surface *map)
 {
         for (size_t y = 0, index = 0; y < map_h(map); y++) {
                 for (size_t x = 0; x < map_w(map); x++, index++) {
-                        if (map_opaque_at(map_surface, x, y)) {
+                        if (map_opaque_at(map, x, y)) {
                                 fov_map.opq[index] = 1;
                         }
                 }
@@ -641,9 +646,9 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         fov(&fov_map, cursor[X], cursor[Y], FOV_RAD);
 
         /* Render the main surface map */
-        map_render(map_surface, renderer, textures, transparency, 0);
-        if (map_l2) {
-                map_render(map_l2, renderer, textures, transparency, 5);
+        map_render(maps[MAP_FLOOR1], renderer, textures, transparency, 0);
+        if (maps[MAP_FLOOR2]) {
+                map_render(maps[MAP_FLOOR2], renderer, textures, transparency, 5);
         }
 
         /* Paint the grid */
@@ -704,14 +709,14 @@ void on_mouse_button(SDL_MouseButtonEvent * event)
                map[X], map[Y], view_rendered_at(view[X], view[Y]) ? 't' : 'f');
 }
 
-static void move_cursor(int dx, int dy)
+static void move_cursor(SDL_Surface *map, int dx, int dy)
 {
         point_t dir = {dx, dy, 0}, newcursor;
         rotate(dir, camera_rotation);
         point_copy(cursor, newcursor);
         translate(newcursor, dir);
-        if (map_contains(map_surface, newcursor[X], newcursor[Y]) &&
-            map_passable_at(map_surface, newcursor[X], newcursor[Y])) {
+        if (map_contains(map, newcursor[X], newcursor[Y]) &&
+            map_passable_at(map, newcursor[X], newcursor[Y])) {
                 point_copy(newcursor, cursor);
         }
 }
@@ -719,20 +724,20 @@ static void move_cursor(int dx, int dy)
 /**
  * Handle key presses.
  */
-void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency)
+void on_keydown(SDL_KeyboardEvent * event, int *quit, bool * transparency, SDL_Surface *map)
 {
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                move_cursor(-1, 0);
+                move_cursor(map, -1, 0);
                 break;
         case SDLK_RIGHT:
-                move_cursor(1, 0);
+                move_cursor(map, 1, 0);
                 break;
         case SDLK_UP:
-                move_cursor(0, -1);
+                move_cursor(map, 0, -1);
                 break;
         case SDLK_DOWN:
-                move_cursor(0, 1);
+                move_cursor(map, 0, 1);
                 break;
         case SDLK_q:
                 *quit = 1;
@@ -803,24 +808,29 @@ int main(int argc, char **argv)
         }
 
         if (!
-            (map_surface =
+            (maps[MAP_FLOOR1] =
              get_map_surface(args.filename ? args.filename : "map.png"))) {
                 goto destroy_textures;
         }
 
         if (args.filename_l2) {
-                if (!(map_l2 = get_map_surface(args.filename_l2))) {
-                        goto destroy_map;
+                if (!(maps[MAP_FLOOR2] = get_map_surface(args.filename_l2))) {
+                        goto destroy_maps;
+                }
+                if ((map_w(maps[MAP_FLOOR1]) != map_w(maps[MAP_FLOOR2])) ||
+                    (map_h(maps[MAP_FLOOR1]) != map_h(maps[MAP_FLOOR2]))) {
+                        printf("Maps must be same size!\n");
+                        goto destroy_maps;
                 }
         }
 
         /* Setup the fov map. */
-        fov_map.w = map_w(map_surface);
-        fov_map.h = map_h(map_surface);
+        fov_map.w = map_w(maps[MAP_FLOOR1]);
+        fov_map.h = map_h(maps[MAP_FLOOR2]);
         fov_map.opq = calloc(1, fov_map.w * fov_map.h);
         fov_map.vis = calloc(1, fov_map.w * fov_map.h);
         if (args.fov) {
-                setup_fov(map_surface);
+                setup_fov(maps[MAP_FLOOR1]);
         }
 
         start_ticks = SDL_GetTicks();
@@ -834,7 +844,8 @@ int main(int argc, char **argv)
                                 break;
                         case SDL_KEYDOWN:
                                 on_keydown(&event.key, &done,
-                                           &args.transparency);
+                                           &args.transparency,
+                                           maps[MAP_FLOOR1]);
                                 break;
                         case SDL_WINDOWEVENT:
                                 frames++;
@@ -868,11 +879,12 @@ int main(int argc, char **argv)
                        ((double)frames * 1000) / (end_ticks - start_ticks)
                     );
         }
-destroy_map:
-        if (map_l2) {
-                SDL_FreeSurface(map_l2);
+destroy_maps:
+        for (int i = 0; i < N_MAPS; i++) {
+                if (maps[i]) {
+                        SDL_FreeSurface(maps[i]);
+                }
         }
-        SDL_FreeSurface(map_surface);
 
 destroy_textures:
         for (int i = 0; i < N_TEXTURES; i++) {
