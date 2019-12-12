@@ -8,10 +8,9 @@
 #include "fov.h"
 #include "iso.h"
 #include "model.h"
+#include "point.h"
 
 typedef uint32_t pixel_t;
-typedef int point_t[3];
-typedef int matrix_t[2][2];
 typedef SDL_Surface map_t;
 
 enum {
@@ -51,21 +50,6 @@ enum {
         PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
 };
 
-typedef enum {
-        ROTATE_0,
-        ROTATE_90,
-        ROTATE_180,
-        ROTATE_270,
-        N_ROTATIONS
-} rotation_t;
-
-enum {
-        X,
-        Y,
-        Z,
-        N_DIMENSIONS
-};
-
 enum {
         MAP_FLOOR1,
         MAP_FLOOR2,
@@ -86,13 +70,6 @@ typedef struct {
         map_t *map;
         bool transparency;
 } session_t;
-
-#define point_init(p) ((p) = {0, 0, 0})
-#define point_copy(f, t) do {\
-                (t)[X] = (f)[X];\
-                (t)[Y] = (f)[Y];\
-                (t)[Z] = (f)[Z];\
-        } while(0);
 
 #define FPS 60
 #define MAP_Z_SEPARATION 5
@@ -142,17 +119,6 @@ static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
         {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_INTERIOR}       /* interior */
 };
 
-
-static const matrix_t rotations[N_ROTATIONS] = {
-        {{1, 0},                /* 0 degrees */
-         {0, 1}},
-        {{0, 1},                /* 90 degrees */
-         {-1, 0}},
-        {{-1, 0},               /* 180 degrees */
-         {0, -1}},
-        {{0, -1},               /* 270 degrees */
-         {1, 0}}
-};
 
 static fov_map_t fov_map;
 static const int FOV_RAD = 32;
@@ -322,24 +288,10 @@ static inline void view_to_camera(point_t view, point_t cam)
         cam[Y] = view[Y] - VIEW_H / 2;
 }
 
-static inline void rotate(point_t p, rotation_t r)
-{
-        const matrix_t *m = &rotations[r];
-        int x = p[X], y = p[Y];
-        p[X] = x * (*m)[0][0] + y * (*m)[0][1];
-        p[Y] = x * (*m)[1][0] + y * (*m)[1][1];
-}
-
-static inline void translate(point_t p, point_t o)
-{
-        p[X] += o[X];
-        p[Y] += o[Y];
-}
-
 static inline void view_to_map(point_t view, point_t map, point_t cursor)
 {
         view_to_camera(view, map);
-        rotate(map, camera_rotation);
+        point_rotate(map, camera_rotation);
         map[X] += cursor[X];
         map[Y] += cursor[Y];
 }
@@ -687,9 +639,9 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t *session)
 static void move_cursor(map_t * map, point_t cursor, int dx, int dy)
 {
         point_t dir = { dx, dy, 0 }, newcursor;
-        rotate(dir, camera_rotation);
+        point_rotate(dir, camera_rotation);
         point_copy(cursor, newcursor);
-        translate(newcursor, dir);
+        point_translate(newcursor, dir);
         if (map_contains(map, newcursor[X], newcursor[Y]) &&
             map_passable_at(map, newcursor[X], newcursor[Y])) {
                 point_copy(newcursor, cursor);
