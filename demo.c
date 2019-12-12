@@ -7,6 +7,7 @@
 
 #include "fov.h"
 #include "iso.h"
+#include "model.h"
 
 typedef uint32_t pixel_t;
 typedef int point_t[3];
@@ -28,13 +29,6 @@ enum {
         TEXTURE_RIGHTSHORT,
         TEXTURE_INTERIOR,
         N_TEXTURES
-};
-
-enum {
-        MODEL_FACE_LEFT,
-        MODEL_FACE_RIGHT,
-        MODEL_FACE_TOP,
-        N_MODEL_FACES
 };
 
 enum {
@@ -86,16 +80,6 @@ struct args {
         bool delay;
         bool transparency;
 };
-
-typedef struct {
-        SDL_Texture *textures[N_MODEL_FACES];
-
-        /* The offsets shift textures from the default position where the tile
-         * would normally be placed */
-        SDL_Rect offsets[N_MODEL_FACES];
-
-        size_t tile_h;          /* total height in tiles */
-} model_t;
 
 typedef struct {
         point_t cursor;
@@ -178,36 +162,6 @@ static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
 
 static map_t *maps[N_MAPS];
-
-/**
- * XXX: this could be done as a preprocessing step that generates a header
- * file with static declarations of all the model data.
- */
-static void model_setup(model_t * model, SDL_Texture ** textures,
-                        const size_t * texture_indices)
-{
-        /* Store the textures and their sizes. */
-        for (size_t i = 0; i < N_MODEL_FACES; i++) {
-                int texture_index = texture_indices[i];
-                model->textures[i] = textures[texture_index];
-                SDL_QueryTexture(model->textures[i], NULL, NULL,
-                                 &model->offsets[i].w, &model->offsets[i].h);
-        }
-
-        model->offsets[MODEL_FACE_RIGHT].x = model->offsets[MODEL_FACE_LEFT].w;
-        model->offsets[MODEL_FACE_RIGHT].y =
-            model->offsets[MODEL_FACE_RIGHT].h - TILE_HEIGHT;
-        model->offsets[MODEL_FACE_LEFT].y =
-            model->offsets[MODEL_FACE_LEFT].h - TILE_HEIGHT;
-        model->offsets[MODEL_FACE_TOP].y =
-            (model->offsets[MODEL_FACE_LEFT].y +
-             model->offsets[MODEL_FACE_TOP].h / 2);
-        int screen_h =
-            model->offsets[MODEL_FACE_LEFT].h +
-            model->offsets[MODEL_FACE_TOP].h / 2;
-        model->tile_h = screen_h / TILE_HEIGHT;
-}
-
 
 static inline pixel_t map_get_pixel(map_t * map, size_t x, size_t y)
 {
@@ -829,7 +783,7 @@ int main(int argc, char **argv)
 
         /* Setup the models */
         for (size_t i = 0; i < N_MODELS; i++) {
-                model_setup(&models[i], textures, texture_indices[i]);
+                model_init(&models[i], textures, texture_indices[i], TILE_HEIGHT);
         }
 
         if (!
