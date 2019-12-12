@@ -98,8 +98,13 @@ typedef struct {
 } model_t;
 
 typedef struct {
+        volume_t *volume;
+        rotation_t rotation;
         point_t cursor;
-        map_t *map;
+} view_t;
+
+typedef struct {
+        view_t view;
         bool transparency;
 } session_t;
 
@@ -730,15 +735,25 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t *session)
                map[X], map[Y], view_rendered_at(view[X], view[Y]) ? 't' : 'f');
 }
 
-static void move_cursor(map_t * map, point_t cursor, int dx, int dy)
+static map_t *session_z_to_map(session_t *ses, int z)
 {
-        point_t dir = { dx, dy, 0 }, newcursor;
-        rotate(dir, camera_rotation);
-        point_copy(cursor, newcursor);
-        translate(newcursor, dir);
-        if (map_contains(map, newcursor[X], newcursor[Y]) &&
-            map_passable_at(map, newcursor[X], newcursor[Y])) {
-                point_copy(newcursor, cursor);
+        int index = x / MAP_Z_SEPARATION;
+        if (index < 0 || index > ses->n_maps) {
+                return NULL;
+        }
+        return ses->maps[index];
+}
+
+static void view_move_cursor(view_t *view, point_t direction)
+{
+        point_t cursor, map_t *map;
+        
+        point_copy_from(cursor, view->cursor);
+        rotate(direction, view->rotation);
+        translate(cursor, direction);
+        if ((map = volume_get_map_at(view->volume, cursor)) &&
+            map_passable_at_xy(map, cursor[X], cursor[Y])) {
+                point_copy_from(view->cursor, cursor);
         }
 }
 
@@ -750,16 +765,22 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
         printf("%d (0x%08x)\n", event->keysym.sym, event->keysym.sym);
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                move_cursor(session->map, session->cursor, -1, 0);
+                view_move_cursor(session->view, {-1, 0, 0});
                 break;
         case SDLK_RIGHT:
-                move_cursor(session->map, session->cursor, 1, 0);
+                move_cursor_horz(session->map, session->cursor, 1, 0);
                 break;
         case SDLK_UP:
-                move_cursor(session->map, session->cursor, 0, -1);
+                move_cursor_horz(session->map, session->cursor, 0, -1);
                 break;
         case SDLK_DOWN:
-                move_cursor(session->map, session->cursor, 0, 1);
+                move_cursor_horz(session->map, session->cursor, 0, 1);
+                break;
+        case SDLK_PAGEUP:
+                move_cursor_vert(session->maps, session->cursor, 1);
+                break;
+        case SDLK_PAGEDOWN:
+                move_cursor_vert(session->maps, session->cursor, -1);
                 break;
         case SDLK_q:
                 *quit = 1;
