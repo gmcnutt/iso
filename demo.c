@@ -7,11 +7,9 @@
 
 #include "fov.h"
 #include "iso.h"
-
-typedef uint32_t pixel_t;
-typedef int point_t[3];
-typedef int matrix_t[2][2];
-typedef SDL_Surface map_t;
+#include "map.h"
+#include "model.h"
+#include "point.h"
 
 enum {
         MODEL_RENDER_FLAG_TRANSPARENT = 1,
@@ -31,45 +29,10 @@ enum {
 };
 
 enum {
-        MODEL_FACE_LEFT,
-        MODEL_FACE_RIGHT,
-        MODEL_FACE_TOP,
-        N_MODEL_FACES
-};
-
-enum {
         MODEL_TALL,
         MODEL_SHORT,
         MODEL_INTERIOR,
         N_MODELS
-};
-
-enum {
-        PIXEL_VALUE_TREE = 0x004001ff,
-        PIXEL_VALUE_SHRUB = 0x008000ff,
-        PIXEL_VALUE_GRASS = 0x00ff00ff,
-        PIXEL_VALUE_FLOOR = 0x0000f0ff,
-        PIXEL_VALUE_WALL = 0xffffffff
-};
-
-enum {
-        PIXEL_MASK_OPAQUE = 0x00000100, /* blue bit 0 */
-        PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
-};
-
-typedef enum {
-        ROTATE_0,
-        ROTATE_90,
-        ROTATE_180,
-        ROTATE_270,
-        N_ROTATIONS
-} rotation_t;
-
-enum {
-        X,
-        Y,
-        Z,
-        N_DIMENSIONS
 };
 
 enum {
@@ -88,16 +51,6 @@ struct args {
 };
 
 typedef struct {
-        SDL_Texture *textures[N_MODEL_FACES];
-
-        /* The offsets shift textures from the default position where the tile
-         * would normally be placed */
-        SDL_Rect offsets[N_MODEL_FACES];
-
-        size_t tile_h;          /* total height in tiles */
-} model_t;
-
-typedef struct {
         volume_t *volume;
         rotation_t rotation;
         point_t cursor;
@@ -107,13 +60,6 @@ typedef struct {
         view_t view;
         bool transparency;
 } session_t;
-
-#define point_init(p) ((p) = {0, 0, 0})
-#define point_copy(f, t) do {\
-                (t)[X] = (f)[X];\
-                (t)[Y] = (f)[Y];\
-                (t)[Z] = (f)[Z];\
-        } while(0);
 
 #define FPS 60
 #define MAP_Z_SEPARATION 5
@@ -134,19 +80,6 @@ typedef struct {
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-#define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
-#define map_passable_at(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
-#define map_contains(m, x, y) \
-        (between_inc((x), map_left(m), map_right(m)) && \
-         between_inc((y), map_top(m), map_bottom(m)))
-#define map_h(m) ((m)->h)
-#define map_w(m) ((m)->w)
-#define map_left(m) 0
-#define map_right(m) ((m)->w - 1)
-#define map_top(m) 0
-#define map_bottom(m) ((m)->h - 1)
-#define map_free(m) (SDL_FreeSurface(m))
-
 static const char *texture_files[] = {
         "grass.png",
         "gray_left.png",
@@ -164,17 +97,6 @@ static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
 };
 
 
-static const matrix_t rotations[N_ROTATIONS] = {
-        {{1, 0},                /* 0 degrees */
-         {0, 1}},
-        {{0, 1},                /* 90 degrees */
-         {-1, 0}},
-        {{-1, 0},               /* 180 degrees */
-         {0, -1}},
-        {{0, -1},               /* 270 degrees */
-         {1, 0}}
-};
-
 static fov_map_t fov_map;
 static const int FOV_RAD = 32;
 
@@ -183,76 +105,6 @@ static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
 
 static map_t *maps[N_MAPS];
-
-/**
- * XXX: this could be done as a preprocessing step that generates a header
- * file with static declarations of all the model data.
- */
-static void model_setup(model_t * model, SDL_Texture ** textures,
-                        const size_t * texture_indices)
-{
-        /* Store the textures and their sizes. */
-        for (size_t i = 0; i < N_MODEL_FACES; i++) {
-                int texture_index = texture_indices[i];
-                model->textures[i] = textures[texture_index];
-                SDL_QueryTexture(model->textures[i], NULL, NULL,
-                                 &model->offsets[i].w, &model->offsets[i].h);
-        }
-
-        model->offsets[MODEL_FACE_RIGHT].x = model->offsets[MODEL_FACE_LEFT].w;
-        model->offsets[MODEL_FACE_RIGHT].y =
-            model->offsets[MODEL_FACE_RIGHT].h - TILE_HEIGHT;
-        model->offsets[MODEL_FACE_LEFT].y =
-            model->offsets[MODEL_FACE_LEFT].h - TILE_HEIGHT;
-        model->offsets[MODEL_FACE_TOP].y =
-            (model->offsets[MODEL_FACE_LEFT].y +
-             model->offsets[MODEL_FACE_TOP].h / 2);
-        int screen_h =
-            model->offsets[MODEL_FACE_LEFT].h +
-            model->offsets[MODEL_FACE_TOP].h / 2;
-        model->tile_h = screen_h / TILE_HEIGHT;
-}
-
-
-static inline pixel_t map_get_pixel(map_t * map, size_t x, size_t y)
-{
-        /* The pitch is the length of a row of pixels in bytes. Find the first
-         * byte of the desired pixel then cast it to an RGBA 32 bit value to
-         * check it. */
-        size_t offset = (y * map->pitch + x * sizeof (pixel_t));
-        uint8_t *byteptr = (uint8_t *) map->pixels;
-        byteptr += offset;
-        uint32_t *pixelptr = (uint32_t *) byteptr;
-        return *pixelptr;
-}
-
-static map_t *map_from_image(const char *filename)
-{
-        SDL_Surface *surface;
-
-        /* Load the image file that has the map */
-        if (!(surface = IMG_Load(filename))) {
-                printf("%s:IMG_Load:%s\n", __FUNCTION__, SDL_GetError());
-                return NULL;
-        }
-
-        /* Make sure the pixels are in RGBA format, 8 bits per pixel */
-        if (surface->format->format != SDL_PIXELFORMAT_RGBA8888) {
-                SDL_Surface *tmp;
-                tmp =
-                    SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA8888,
-                                             0);
-                SDL_FreeSurface(surface);
-                surface = tmp;
-                if (!surface) {
-                        printf("%s:SDL_ConvertSurfaceFormat:%s\n", __FUNCTION__,
-                               SDL_GetError());
-                        return NULL;
-                }
-        }
-
-        return surface;
-}
 
 static void setup_fov(map_t * map)
 {
@@ -373,24 +225,10 @@ static inline void view_to_camera(point_t view, point_t cam)
         cam[Y] = view[Y] - VIEW_H / 2;
 }
 
-static inline void rotate(point_t p, rotation_t r)
-{
-        const matrix_t *m = &rotations[r];
-        int x = p[X], y = p[Y];
-        p[X] = x * (*m)[0][0] + y * (*m)[0][1];
-        p[Y] = x * (*m)[1][0] + y * (*m)[1][1];
-}
-
-static inline void translate(point_t p, point_t o)
-{
-        p[X] += o[X];
-        p[Y] += o[Y];
-}
-
 static inline void view_to_map(point_t view, point_t map, point_t cursor)
 {
         view_to_camera(view, map);
-        rotate(map, camera_rotation);
+        point_rotate(map, camera_rotation);
         map[X] += cursor[X];
         map[Y] += cursor[Y];
 }
@@ -548,7 +386,8 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
 
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
-                                bool cutaway = cutaway_at(vloc, session->cursor);
+                                bool cutaway =
+                                    cutaway_at(vloc, session->cursor);
                                 if (cutaway && view_z > session->cursor[Z]) {
                                         continue;
                                 }
@@ -613,14 +452,18 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                          * behind them. */
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
-                                        if (skipface(map, nview, session->cursor, cutaway)) {
+                                        if (skipface
+                                            (map, nview, session->cursor,
+                                             cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
 
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
-                                        if (skipface(map, nview, session->cursor, cutaway)) {
+                                        if (skipface
+                                            (map, nview, session->cursor,
+                                             cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
@@ -674,7 +517,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
                         break;
                 }
                 int map_z = i * MAP_Z_SEPARATION;
-                map_render(map, renderer, textures, session, map_z - session->cursor[Z]);
+                map_render(map, renderer, textures, session,
+                           map_z - session->cursor[Z]);
         }
 
         /* Paint the grid */
@@ -721,7 +565,7 @@ static SDL_Texture *load_texture(SDL_Renderer * renderer, const char *filename)
 /**
  * Handle button clicks.
  */
-void on_mouse_button(SDL_MouseButtonEvent * event, session_t *session)
+void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
 {
         point_t view = { 0, 0, 0 };
         view[X] = screen_to_view_x(event->x, event->y);
@@ -733,15 +577,6 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t *session)
                event->x, event->y,
                view[X], view[Y],
                map[X], map[Y], view_rendered_at(view[X], view[Y]) ? 't' : 'f');
-}
-
-static map_t *session_z_to_map(session_t *ses, int z)
-{
-        int index = x / MAP_Z_SEPARATION;
-        if (index < 0 || index > ses->n_maps) {
-                return NULL;
-        }
-        return ses->maps[index];
 }
 
 static void view_move_cursor(view_t *view, point_t direction)
@@ -850,7 +685,8 @@ int main(int argc, char **argv)
 
         /* Setup the models */
         for (size_t i = 0; i < N_MODELS; i++) {
-                model_setup(&models[i], textures, texture_indices[i]);
+                model_init(&models[i], textures, texture_indices[i],
+                           TILE_HEIGHT);
         }
 
         if (!
