@@ -44,7 +44,6 @@ typedef struct {
 #define mapstack_h(ms) ((ms)->h)
 
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
-#define map_passable_at_xy(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
 #define map_contains(m, x, y) (((x) >= 0 && (x) < map_w(m)) && ((y) >= 0 && (y) < map_h(m)))
 #define map_h(m) ((m)->h)
 #define map_w(m) ((m)->w)
@@ -77,6 +76,12 @@ static inline pixel_t map_get_pixel(map_t * map, size_t x, size_t y)
         byteptr += offset;
         uint32_t *pixelptr = (uint32_t *) byteptr;
         return *pixelptr;
+}
+
+static inline bool map_passable_at_xy(map_t *map, int x, int y)
+{
+        pixel_t pix = map_get_pixel(map, x, y);
+        return pix && !(pix & PIXEL_MASK_IMPASSABLE);
 }
 
 /**

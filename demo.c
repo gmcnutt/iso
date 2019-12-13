@@ -340,7 +340,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                         size_t map_index = map_xy_to_index(map, map_x, map_y);
 
                         /* Draw the cursor */
-                        if (view_z == session->view.cursor[Z] &&
+                        if (view_z == 0 &&
                             map_x == session->view.cursor[X] &&
                             map_y == session->view.cursor[Y]) {
                                 model_render(renderer, &models[MODEL_TALL],
