@@ -33,5 +33,20 @@ typedef struct {
  */
 bool view_move_cursor(view_t *view, const point_t direction);
 
+static inline void view_to_camera(point_t view, point_t cam)
+{
+        cam[X] = view[X] - VIEW_W / 2;
+        cam[Y] = view[Y] - VIEW_H / 2;
+}
+
+static inline void view_to_map(view_t *view, point_t viewpt, point_t map)
+{
+        view_to_camera(viewpt, map);
+        point_rotate(map, view->rotation);
+        map[X] += view->cursor[X];
+        map[Y] += view->cursor[Y];
+}
+
+
 
 #endif

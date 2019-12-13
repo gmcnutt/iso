@@ -45,9 +45,7 @@ typedef struct {
 
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
 #define map_passable_at_xy(m, x, y) (!(map_get_pixel((m), (x), (y)) & PIXEL_MASK_IMPASSABLE))
-#define map_contains(m, x, y) \
-        (between_inc((x), map_left(m), map_right(m)) && \
-         between_inc((y), map_top(m), map_bottom(m)))
+#define map_contains(m, x, y) (((x) >= 0 && (x) < map_w(m)) && ((y) >= 0 && (y) < map_h(m)))
 #define map_h(m) ((m)->h)
 #define map_w(m) ((m)->w)
 #define map_left(m) 0

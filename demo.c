@@ -93,7 +93,6 @@ static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
 static fov_map_t fov_map;
 static const int FOV_RAD = 32;
 
-static rotation_t camera_rotation = ROTATE_0;
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
 
@@ -210,21 +209,6 @@ static inline int view_to_camera_y(int view_y)
         return view_y - VIEW_H / 2;
 }
 
-static inline void view_to_camera(point_t view, point_t cam)
-{
-        cam[X] = view[X] - VIEW_W / 2;
-        cam[Y] = view[Y] - VIEW_H / 2;
-}
-
-static inline void view_to_map(point_t view, point_t map, point_t cursor)
-{
-        view_to_camera(view, map);
-        point_rotate(map, camera_rotation);
-        map[X] += cursor[X];
-        map[Y] += cursor[Y];
-}
-
-
 static inline void map_to_camera(point_t left, point_t right, point_t cursor)
 {
         left[X] = (right[X] - (right[Z] - cursor[Z])) - cursor[X];
@@ -321,13 +305,13 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
-static bool skipface(map_t * map, point_t nview, point_t cursor, bool cutaway)
+static bool skipface(view_t *view, map_t * map, point_t nview, bool cutaway)
 {
         point_t nmap;
-        view_to_map(nview, nmap, cursor);
+        view_to_map(view, nview, nmap);
         return (map_opaque_at(map, nmap[X], nmap[Y])
                 && in_fov(map, nmap[X], nmap[Y]) &&
-                (cutaway || !(cutaway_at(nview, cursor))));
+                (cutaway || !(cutaway_at(nview, view->cursor))));
 }
 
 static void map_render(map_t * map, SDL_Renderer * renderer,
@@ -346,7 +330,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                 for (int view_x = 0; view_x < VIEW_W; view_x++) {
                         point_t vloc = { view_x, view_y, view_z };
                         point_t mloc;
-                        view_to_map(vloc, mloc, session->view.cursor);
+                        view_to_map(&session->view, vloc, mloc);
                         int map_y = mloc[Y];
                         int map_x = mloc[X];
 
@@ -445,8 +429,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
                                         if (skipface
-                                            (map, nview, session->view.cursor,
-                                             cutaway)) {
+                                            (&session->view, map, nview, cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
@@ -454,8 +437,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
                                         if (skipface
-                                            (map, nview, session->view.cursor,
-                                             cutaway)) {
+                                            (&session->view, map, nview, cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
@@ -560,7 +542,7 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
         view[X] = screen_to_view_x(event->x, event->y);
         view[Y] = screen_to_view_y(event->x, event->y);
         point_t map = { 0, 0, 0 };
-        view_to_map(view, map, session->view.cursor);
+        view_to_map(&session->view, view, map);
 
         printf("s(%d, %d) -> v(%d, %d) -> m(%d, %d) -> %c\n",
                event->x, event->y,
@@ -582,7 +564,6 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
                 { 0,  0, -1}  /* vert down */
         };
         
-        printf("%d (0x%08x)\n", event->keysym.sym, event->keysym.sym);
         switch (event->keysym.sym) {
         case SDLK_LEFT:
                 view_move_cursor(&session->view, directions[DIR_XLEFT]);
@@ -609,10 +590,10 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
                 session->transparency = !(session->transparency);
                 break;
         case SDLK_PERIOD:
-                camera_rotation = (camera_rotation + 1) % N_ROTATIONS;
+                session->view.rotation = (session->view.rotation + 1) % N_ROTATIONS;
                 break;
         case SDLK_COMMA:
-                camera_rotation = (camera_rotation - 1) % N_ROTATIONS;
+                session->view.rotation = (session->view.rotation - 1) % N_ROTATIONS;
                 break;
         default:
                 break;
