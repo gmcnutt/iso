@@ -227,9 +227,9 @@ static inline size_t map_xy_to_index(map_t * map, size_t map_x, size_t map_y)
         return map_y * map_w(map) + map_x;
 }
 
-static inline int in_fov(map_t * map, int map_x, int map_y)
+static inline int in_fov(point_t mloc)
 {
-        return fov_map.vis[map_x + map_y * map_w(map)];
+        return fov_map.vis[mloc[X] + mloc[Y] * fov_map.w];
 }
 
 static inline int view_rendered_at(size_t view_x, size_t view_y)
@@ -310,7 +310,7 @@ static bool skipface(view_t *view, map_t * map, point_t nview, bool cutaway)
         point_t nmap;
         view_to_map(view, nview, nmap);
         return (map_opaque_at(map, nmap[X], nmap[Y])
-                && in_fov(map, nmap[X], nmap[Y]) &&
+                && in_fov(nmap) &&
                 (cutaway || !(cutaway_at(nview, view->cursor))));
 }
 
@@ -337,7 +337,6 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                         if (!(map_contains(map, map_x, map_y))) {
                                 continue;
                         }
-                        size_t map_index = map_xy_to_index(map, map_x, map_y);
 
                         /* Draw the cursor */
                         if (view_z == 0 &&
@@ -350,7 +349,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                         }
 
                         /* Draw the terrain */
-                        if (fov_map.vis[map_index]) {
+                        if (in_fov(mloc)) {
                                 pixel_t pixel =
                                     map_get_pixel(map, map_x, map_y);
                                 if (!pixel) {
