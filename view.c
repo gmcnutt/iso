@@ -8,6 +8,8 @@
 
 void view_init(view_t *view, mapstack_t *maps, bool use_fov)
 {
+        memset(view, 0, sizeof(*view));
+        
         view->maps = maps;
         view->map = maps->maps[MAP_FLOOR1];
 
@@ -26,6 +28,12 @@ void view_init(view_t *view, mapstack_t *maps, bool use_fov)
         }
 }
 
+void view_deinit(view_t *view)
+{
+        fov_deinit(&view->fov);
+        memset(view, 0, sizeof(*view));
+        
+}
 
 bool view_move_cursor(view_t * view, const point_t dir)
 {

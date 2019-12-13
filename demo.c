@@ -213,11 +213,6 @@ static inline size_t map_xy_to_index(map_t * map, size_t map_x, size_t map_y)
         return map_y * map_w(map) + map_x;
 }
 
-static inline int in_fov(view_t *view, point_t mloc)
-{
-        return view->fov.vis[mloc[X] + mloc[Y] * view->fov.w];
-}
-
 static inline int view_rendered_at(size_t view_x, size_t view_y)
 {
         return rendered[view_y * VIEW_W + view_x];
@@ -311,7 +306,7 @@ static bool eclipsed_by(view_t * view, map_t * map, point_t nview, bool cutaway)
         }
 
         /* Yes, is the wall in fov? */
-        if (!in_fov(view, nmap)) {
+        if (!view_map_in_fov(view, nmap)) {
                 /* No. */
                 return false;
         }
@@ -376,7 +371,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                         }
 
                         /* Draw the terrain */
-                        if (in_fov(view, mloc)) {
+                        if (view_map_in_fov(view, mloc)) {
                                 pixel_t pixel =
                                     map_get_pixel(map, map_x, map_y);
                                 if (!pixel) {
