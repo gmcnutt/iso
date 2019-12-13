@@ -305,20 +305,57 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
+/**
+ * Given a wall section W, look at its left (or right) neighbor to decide if we
+ * should not render W's left (or right) face. If the neighbor is a wall in fov
+ * and is going to be rendered tall then do not render the face, because the
+ * neighbor is going to cover it up. Not only would rendering it be a wasted
+ * operation, but if we are transparent then the extra edges are visually
+ * confusing.
+ */
 static bool skipface(view_t *view, map_t * map, point_t nview, bool cutaway)
 {
         point_t nmap;
         view_to_map(view, nview, nmap);
-        return (map_opaque_at(map, nmap[X], nmap[Y])
-                && in_fov(nmap) &&
-                (cutaway || !(cutaway_at(nview, view->cursor))));
+
+        /* Is there a wall there? */
+        if (!map_opaque_at(map, nmap[X], nmap[Y])) {
+                /* No, so this face will not be eclipsed and should be
+                 * rendered. */
+                return false;
+        }
+
+        /* Yes, is it in fov? */
+        if (! in_fov(nmap)) {
+                /* No, it won't be rendered and so won't eclipse this face, so
+                 * render the face. */
+                return false;
+        }
+
+        /* Yes, is this section clipped? */
+        if (cutaway) {
+                /* Yes. So skip the face, it is sure to be eclipsed by this
+                 * neighbor. */
+                return true;
+        }
+
+        /* No, is the neighbor clipped? */
+        if (cutaway_at(nview, view->cursor)) {
+                /* Yes. The clipped neighbor will be too short to fully eclipse
+                 * this face, so we must render the face. */
+                return false;
+        }
+
+        /* No, the neighbor is full-sized, so it will eclipse this face and we
+         * do not need to render the face. */
+        return true;
 }
 
 static void map_render(map_t * map, SDL_Renderer * renderer,
                        SDL_Texture ** textures, session_t * session, int view_z)
 {
         SDL_Rect src, dst;
-        point_t nview;
+        point_t nview = {0, 0, view_z};
 
         src.x = 0;
         src.y = 0;
