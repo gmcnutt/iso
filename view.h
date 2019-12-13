@@ -9,6 +9,7 @@
 
 #include <stdbool.h>
 
+#include "fov.h"
 #include "point.h"
 #include "map.h"
 
@@ -26,7 +27,13 @@ typedef struct {
         rotation_t rotation;
         mapstack_t *maps;       /* all maps */
         map_t *map;             /* current map */
+        fov_map_t fov;
 } view_t;
+
+/**
+ * Initialize the already-allocated view.
+ */
+void view_init(view_t *view, mapstack_t *maps, bool use_fov);
 
 /**
  * Attempt to move the cursor.

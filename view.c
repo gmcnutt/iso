@@ -6,6 +6,27 @@
 
 #include "view.h"
 
+void view_init(view_t *view, mapstack_t *maps, bool use_fov)
+{
+        view->maps = maps;
+        view->map = maps->maps[MAP_FLOOR1];
+
+        fov_init(&view->fov, map_w(view->map), map_h(view->map));
+
+        if (use_fov) {
+                map_t *map = view->map;
+                fov_map_t *fov = &view->fov;
+                for (size_t y = 0, index = 0; y < map_h(map); y++) {
+                        for (size_t x = 0; x < map_w(map); x++, index++) {
+                                if (map_opaque_at(map, x, y)) {
+                                        fov->opq[index] = 1;
+                                }
+                        }
+                }
+        }
+}
+
+
 bool view_move_cursor(view_t * view, const point_t dir)
 {
         point_t newcur, rdir;
