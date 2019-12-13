@@ -6,7 +6,7 @@
 
 #include "view.h"
 
-bool view_move_cursor(view_t *view, const point_t dir)
+bool view_move_cursor(view_t * view, const point_t dir)
 {
         point_t newcur, rdir;
         map_t *map;

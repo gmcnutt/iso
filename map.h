@@ -56,12 +56,12 @@ typedef struct {
 /**
  * Get the map at index i, or NULL if none or out-of-bounds.
  */
-map_t *mapstack_get(mapstack_t *ms, int i);
+map_t *mapstack_get(mapstack_t * ms, int i);
 
 /**
  * Add a map to the stack.
  */
-bool mapstack_add(mapstack_t *ms, map_t *map);
+bool mapstack_add(mapstack_t * ms, map_t * map);
 
 /**
  * Get the pixel at the given map location.
@@ -78,7 +78,7 @@ static inline pixel_t map_get_pixel(map_t * map, size_t x, size_t y)
         return *pixelptr;
 }
 
-static inline bool map_passable_at_xy(map_t *map, int x, int y)
+static inline bool map_passable_at_xy(map_t * map, int x, int y)
 {
         pixel_t pix = map_get_pixel(map, x, y);
         return pix && !(pix & PIXEL_MASK_IMPASSABLE);

@@ -313,41 +313,44 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
  * operation, but if we are transparent then the extra edges are visually
  * confusing.
  */
-static bool skipface(view_t *view, map_t * map, point_t nview, bool cutaway)
+static bool eclipsed_by(view_t * view, map_t * map, point_t nview, bool cutaway)
 {
         point_t nmap;
         view_to_map(view, nview, nmap);
 
         /* Is there a wall there? */
         if (!map_opaque_at(map, nmap[X], nmap[Y])) {
-                /* No, so this face will not be eclipsed and should be
-                 * rendered. */
+                /* No. */
                 return false;
         }
 
-        /* Yes, is it in fov? */
-        if (! in_fov(nmap)) {
-                /* No, it won't be rendered and so won't eclipse this face, so
-                 * render the face. */
+        /* Yes, is the wall in fov? */
+        if (!in_fov(nmap)) {
+                /* No. */
                 return false;
         }
 
-        /* Yes, is this section clipped? */
+        /* Yes, is it actually in the view rect? */
+        if (nview[X] >= VIEW_W || nview[Y] >= VIEW_H) {
+                /* No. */
+                return false;
+        }
+
+        /* Yes, is this wall section clipped? */
         if (cutaway) {
-                /* Yes. So skip the face, it is sure to be eclipsed by this
-                 * neighbor. */
+                /* Yes. So the neighbor will eclipse it, even if the neighbor
+                 * is also clipped. */
                 return true;
         }
 
         /* No, is the neighbor clipped? */
         if (cutaway_at(nview, view->cursor)) {
-                /* Yes. The clipped neighbor will be too short to fully eclipse
-                 * this face, so we must render the face. */
+                /* Yes. And since we're not, it won't eclipse our upper
+                 * portion. */
                 return false;
         }
 
-        /* No, the neighbor is full-sized, so it will eclipse this face and we
-         * do not need to render the face. */
+        /* No, the neighbor is full-sized. */
         return true;
 }
 
@@ -355,7 +358,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                        SDL_Texture ** textures, session_t * session, int view_z)
 {
         SDL_Rect src, dst;
-        point_t nview = {0, 0, view_z};
+        point_t nview = { 0, 0, view_z };
 
         src.x = 0;
         src.y = 0;
@@ -464,16 +467,18 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                          * behind them. */
                                         nview[X] = view_x;
                                         nview[Y] = view_y + 1;
-                                        if (skipface
-                                            (&session->view, map, nview, cutaway)) {
+                                        if (eclipsed_by
+                                            (&session->view, map, nview,
+                                             cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
 
                                         nview[X] = view_x + 1;
                                         nview[Y] = view_y;
-                                        if (skipface
-                                            (&session->view, map, nview, cutaway)) {
+                                        if (eclipsed_by
+                                            (&session->view, map, nview,
+                                             cutaway)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
@@ -518,7 +523,8 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         view_clear_rendered();
 
         /* Recompute fov based on player's position */
-        fov(&fov_map, session->view.cursor[X], session->view.cursor[Y], FOV_RAD);
+        fov(&fov_map, session->view.cursor[X], session->view.cursor[Y],
+            FOV_RAD);
 
         /* Render the maps in z order */
         for (int i = 0; i < session->maps.n_maps; i++) {
@@ -592,14 +598,14 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
 void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
 {
         static const point_t directions[N_DIR] = {
-                {-1,  0,  0}, /* left */
-                { 1,  0,  0}, /* right */
-                { 0, -1,  0}, /* up */
-                { 0,  1,  0}, /* down */
-                { 0,  0,  1}, /* vert up */
-                { 0,  0, -1}  /* vert down */
+                {-1, 0, 0},     /* left */
+                {1, 0, 0},      /* right */
+                {0, -1, 0},     /* up */
+                {0, 1, 0},      /* down */
+                {0, 0, 1},      /* vert up */
+                {0, 0, -1}      /* vert down */
         };
-        
+
         switch (event->keysym.sym) {
         case SDLK_LEFT:
                 view_move_cursor(&session->view, directions[DIR_XLEFT]);
@@ -626,10 +632,12 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
                 session->transparency = !(session->transparency);
                 break;
         case SDLK_PERIOD:
-                session->view.rotation = (session->view.rotation + 1) % N_ROTATIONS;
+                session->view.rotation =
+                    (session->view.rotation + 1) % N_ROTATIONS;
                 break;
         case SDLK_COMMA:
-                session->view.rotation = (session->view.rotation - 1) % N_ROTATIONS;
+                session->view.rotation =
+                    (session->view.rotation - 1) % N_ROTATIONS;
                 break;
         default:
                 break;
@@ -648,7 +656,7 @@ int main(int argc, char **argv)
         Uint32 start_ticks, end_ticks, frames = 0, pre_tick;
         struct args args;
 
-        memset(&session, 0, sizeof(session));
+        memset(&session, 0, sizeof (session));
 
         parse_args(argc, argv, &args);
 
@@ -715,10 +723,7 @@ int main(int argc, char **argv)
         session.view.maps = &session.maps;
 
         /* Setup the fov map. */
-        fov_map.w = map_w(session.view.map);
-        fov_map.h = map_h(session.view.map);
-        fov_map.opq = calloc(1, fov_map.w * fov_map.h);
-        fov_map.vis = calloc(1, fov_map.w * fov_map.h);
+        fov_init(&fov_map, map_w(session.view.map), map_h(session.view.map));
         if (args.fov) {
                 setup_fov(session.view.map);
         }

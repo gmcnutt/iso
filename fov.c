@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "fov.h"
@@ -111,6 +112,27 @@ static void fov_octant(fov_map_t * map, int cx, int cy, int row,
                 if (blocked)
                         break;
         }
+}
+
+void fov_init(fov_map_t * fov, int w, int h)
+{
+        fov->w = w;
+        fov->h = h;
+        fov->opq = calloc(1, (w * h));
+        fov->vis = calloc(1, (w * h));
+}
+
+void fov_deinit(fov_map_t * fov)
+{
+        if (fov->opq) {
+                free(fov->opq);
+                fov->opq = NULL;
+        }
+        if (fov->vis) {
+                free(fov->vis);
+                fov->vis = NULL;
+        }
+        fov->w = fov->h = 0;
 }
 
 void fov(fov_map_t * map, int origin_x, int origin_y, int max_radius)

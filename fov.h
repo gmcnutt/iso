@@ -51,6 +51,13 @@ typedef struct {
 } fov_map_t;
 
 /**
+ * Initialize/deinitialize an fov_map, allocating/deallocating the arrays.
+ */
+void fov_init(fov_map_t * fov, int w, int h);
+void fov_deinit(fov_map_t * fov);
+
+
+/**
  * Compute the field of view for a grid.
  */
 void fov(fov_map_t * map, int origin_x, int origin_y, int max_radius);
