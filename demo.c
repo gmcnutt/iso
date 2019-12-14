@@ -300,7 +300,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
         for (int view_y = 0; view_y < VIEW_H; view_y++) {
                 for (int view_x = 0; view_x < VIEW_W; view_x++) {
                         point_t vloc = { view_x, view_y, view_z };
-                        point_t mloc = {0, 0, map_z};
+                        point_t mloc = { 0, 0, map_z };
                         view_to_map(view, vloc, mloc);
                         int map_y = mloc[Y];
                         int map_x = mloc[X];
@@ -332,8 +332,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
 
                                 /* Cut away anything that obscures the cursor's
                                  * immediate area. */
-                                bool cutaway =
-                                    cutaway_at(vloc, view->cursor);
+                                bool cutaway = cutaway_at(vloc, view->cursor);
                                 if (cutaway && view_z > view->cursor[Z]) {
                                         continue;
                                 }
@@ -500,7 +499,8 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
         printf("s(%d, %d) -> v(%d, %d) -> m(%d, %d) -> %c\n",
                event->x, event->y,
                vloc[X], vloc[Y],
-               mloc[X], mloc[Y], view_rendered_at(vloc[X], vloc[Y]) ? 't' : 'f');
+               mloc[X], mloc[Y], view_rendered_at(vloc[X],
+                                                  vloc[Y]) ? 't' : 'f');
 }
 
 /**
@@ -544,12 +544,10 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
                 session->transparency = !(session->transparency);
                 break;
         case SDLK_PERIOD:
-                view->rotation =
-                    (view->rotation + 1) % N_ROTATIONS;
+                view->rotation = (view->rotation + 1) % N_ROTATIONS;
                 break;
         case SDLK_COMMA:
-                view->rotation =
-                    (view->rotation - 1) % N_ROTATIONS;
+                view->rotation = (view->rotation - 1) % N_ROTATIONS;
                 break;
         default:
                 break;
@@ -566,6 +564,7 @@ int main(int argc, char **argv)
 
         int done = 0;
         Uint32 start_ticks, end_ticks, frames = 0, pre_tick;
+        double total_delay = 0, total_used = 0;
         struct args args;
 
         memset(&session, 0, sizeof (session));
@@ -656,17 +655,20 @@ int main(int argc, char **argv)
                         }
                 }
 
-                frames++;
                 render(renderer, textures, &session);
 
+                frames++;
+                Uint32 post_tick = SDL_GetTicks();
+                Uint32 used = post_tick - pre_tick;
+                pre_tick = post_tick;
+                total_used += used;
+
                 if (args.delay) {
-                        Uint32 post_tick = SDL_GetTicks();
-                        Uint32 used = post_tick - pre_tick;
                         int delay = TICK_PER_FRAME - used;
                         if (delay > 0) {
                                 SDL_Delay(delay);
+                                total_delay += delay;
                         }
-                        pre_tick = post_tick;
                 }
         }
 
@@ -676,6 +678,10 @@ int main(int argc, char **argv)
                 printf("%2.2f FPS\n",
                        ((double)frames * 1000) / (end_ticks - start_ticks)
                     );
+                printf("%f msecs avg loop times\n", (total_used / frames));
+                if (args.delay) {
+                        printf("%f msecs avg delay\n", (total_delay / frames));
+                }
         }
 destroy_maps:
         for (int i = 0; i < N_MAPS; i++) {

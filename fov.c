@@ -119,10 +119,10 @@ int fov_init(fov_map_t * fov, int w, int h)
 {
         fov->w = w;
         fov->h = h;
-        if (! (fov->opq = calloc(1, (w * h)))) {
+        if (!(fov->opq = calloc(1, (w * h)))) {
                 return ERROR_ALLOC;
         }
-        if (! (fov->vis = calloc(1, (w * h)))) {
+        if (!(fov->vis = calloc(1, (w * h)))) {
                 fov_deinit(fov);
                 return ERROR_ALLOC;
         }

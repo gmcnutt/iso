@@ -9,11 +9,11 @@
 #define Z2L(z) ((z) / VIEW_Z_MULT)
 #define L2Z(l) ((l) * VIEW_Z_MULT);
 
-int view_init(view_t *view, mapstack_t *maps, bool use_fov)
+int view_init(view_t * view, mapstack_t * maps, bool use_fov)
 {
         int res = 0;
-        memset(view, 0, sizeof(*view));
-        
+        memset(view, 0, sizeof (*view));
+
         view->maps = maps;
         view->map = maps->maps[MAP_FLOOR1];
 
@@ -40,24 +40,24 @@ int view_init(view_t *view, mapstack_t *maps, bool use_fov)
         return 0;
 }
 
-void view_calc_fov(view_t *view)
+void view_calc_fov(view_t * view)
 {
         for (int i = 0; i < view->maps->n_maps; i++) {
                 fov(&view->fovs[i], view->cursor[X], view->cursor[Y], VIEW_W);
         }
 }
 
-void view_deinit(view_t *view)
+void view_deinit(view_t * view)
 {
         if (view->maps) {
                 for (int i = 0; i < view->maps->n_maps; i++) {
                         fov_deinit(&view->fovs[i]);
                 }
         }
-        memset(view, 0, sizeof(*view));        
+        memset(view, 0, sizeof (*view));
 }
 
-bool view_in_fov(view_t *view, point_t mloc)
+bool view_in_fov(view_t * view, point_t mloc)
 {
         int lvl = Z2L(mloc[Z]);
         return view->fovs[lvl].vis[mloc[X] + mloc[Y] * view->fovs[lvl].w];

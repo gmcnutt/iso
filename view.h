@@ -33,18 +33,18 @@ typedef struct {
 /**
  * Initialize the already-allocated view.
  */
-int view_init(view_t *view, mapstack_t *maps, bool use_fov);
-void view_deinit(view_t *view);
+int view_init(view_t * view, mapstack_t * maps, bool use_fov);
+void view_deinit(view_t * view);
 
 /**
  * Recalculate the fov map based on the cursor.
  */
-void view_calc_fov(view_t *view);
+void view_calc_fov(view_t * view);
 
 /**
  * Check if the map coordinates are visible from the cursor location.
  */
-bool view_in_fov(view_t *view, point_t mloc);
+bool view_in_fov(view_t * view, point_t mloc);
 
 /**
  * Attempt to move the cursor.
