@@ -247,11 +247,11 @@ static int blocks_fov(int view_x, int view_y, int tile_h)
 
 static bool cutaway_at(point_t view, point_t cursor)
 {
-        int margin = view[Z] > cursor[Z] ? 4 : 3;
+        int margin = 1; //view[Z] > cursor[Z] ? 4 : 3;
         int cam_x = view_to_camera_x(view[X]);
         int cam_y = view_to_camera_y(view[Y]);
-        return (between(cam_x, -margin, 6 + view[Z]) &&
-                between(cam_y, -margin, 6 + view[Z]));
+        return (between(cam_x, -margin, 7 + view[Z]) &&
+                between(cam_y, -margin, 7 + view[Z]));
 }
 
 static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
