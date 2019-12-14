@@ -90,8 +90,6 @@ static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
 };
 
 
-static const int FOV_RAD = 32;
-
 static char rendered[VIEW_W * VIEW_H] = { 0 };
 static model_t models[N_MODELS] = { 0 };
 
@@ -294,9 +292,9 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
  * operation, but if we are transparent then the extra edges are visually
  * confusing.
  */
-static bool eclipsed_by(view_t * view, map_t * map, point_t nview, bool cutaway)
+static bool eclipsed_by(view_t * view, map_t * map, point_t nview, bool cutaway, int map_z)
 {
-        point_t nmap;
+        point_t nmap = {0, 0, map_z};
         view_to_map(view, nview, nmap);
 
         /* Is there a wall there? */
@@ -306,7 +304,7 @@ static bool eclipsed_by(view_t * view, map_t * map, point_t nview, bool cutaway)
         }
 
         /* Yes, is the wall in fov? */
-        if (!view_map_in_fov(view, nmap)) {
+        if (!view_in_fov(view, nmap)) {
                 /* No. */
                 return false;
         }
@@ -336,11 +334,12 @@ static bool eclipsed_by(view_t * view, map_t * map, point_t nview, bool cutaway)
 }
 
 static void map_render(map_t * map, SDL_Renderer * renderer,
-                       SDL_Texture ** textures, session_t * session, int view_z)
+                       SDL_Texture ** textures, session_t * session, int map_z)
 {
         SDL_Rect src, dst;
-        point_t nview = { 0, 0, view_z };
         view_t *view = &session->view;
+        int view_z = map_z - view->cursor[Z];
+        point_t nview = { 0, 0, view_z };
 
         src.x = 0;
         src.y = 0;
@@ -351,7 +350,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
         for (int view_y = 0; view_y < VIEW_H; view_y++) {
                 for (int view_x = 0; view_x < VIEW_W; view_x++) {
                         point_t vloc = { view_x, view_y, view_z };
-                        point_t mloc;
+                        point_t mloc = {0, 0, map_z};
                         view_to_map(view, vloc, mloc);
                         int map_y = mloc[Y];
                         int map_x = mloc[X];
@@ -371,7 +370,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                         }
 
                         /* Draw the terrain */
-                        if (view_map_in_fov(view, mloc)) {
+                        if (view_in_fov(view, mloc)) {
                                 pixel_t pixel =
                                     map_get_pixel(map, map_x, map_y);
                                 if (!pixel) {
@@ -451,7 +450,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         nview[Y] = view_y + 1;
                                         if (eclipsed_by
                                             (view, map, nview,
-                                             cutaway)) {
+                                             cutaway, map_z)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPLEFT;
                                         }
@@ -460,7 +459,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         nview[Y] = view_y;
                                         if (eclipsed_by
                                             (view, map, nview,
-                                             cutaway)) {
+                                             cutaway, map_z)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
@@ -506,15 +505,13 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         view_clear_rendered();
 
         /* Recompute fov based on player's position */
-        fov(&view->fov, view->cursor[X], view->cursor[Y],
-            FOV_RAD);
+        view_calc_fov(view);
 
         /* Render the maps in z order */
         for (int i = 0; i < session->maps.n_maps; i++) {
                 map_t *map = session->maps.maps[i];
                 int map_z = i * VIEW_Z_MULT;
-                map_render(map, renderer, textures, session,
-                           map_z - view->cursor[Z]);
+                map_render(map, renderer, textures, session, map_z);
         }
 
         /* Paint the grid */
@@ -667,7 +664,7 @@ int main(int argc, char **argv)
         }
 
         /* Create the renderer. */
-        if (!(renderer = SDL_CreateRenderer(window, -1, 0))) {
+        if (!(renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC))) {
                 printf("SDL_CreateRenderer: %s\n", SDL_GetError());
                 goto destroy_window;
         }

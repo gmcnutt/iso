@@ -53,7 +53,7 @@ typedef struct {
 /**
  * Initialize/deinitialize an fov_map, allocating/deallocating the arrays.
  */
-void fov_init(fov_map_t * fov, int w, int h);
+int fov_init(fov_map_t * fov, int w, int h);
 void fov_deinit(fov_map_t * fov);
 
 

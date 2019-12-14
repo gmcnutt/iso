@@ -46,6 +46,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <string.h>
 
+#include "error.h"
 #include "fov.h"
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -114,12 +115,18 @@ static void fov_octant(fov_map_t * map, int cx, int cy, int row,
         }
 }
 
-void fov_init(fov_map_t * fov, int w, int h)
+int fov_init(fov_map_t * fov, int w, int h)
 {
         fov->w = w;
         fov->h = h;
-        fov->opq = calloc(1, (w * h));
-        fov->vis = calloc(1, (w * h));
+        if (! (fov->opq = calloc(1, (w * h)))) {
+                return ERROR_ALLOC;
+        }
+        if (! (fov->vis = calloc(1, (w * h)))) {
+                fov_deinit(fov);
+                return ERROR_ALLOC;
+        }
+        return 0;
 }
 
 void fov_deinit(fov_map_t * fov)
