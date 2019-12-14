@@ -81,3 +81,12 @@ bool view_move_cursor(view_t * view, const point_t dir)
         }
         return false;
 }
+
+map_t *view_z_to_map(view_t * view, int z)
+{
+        int lvl = Z2L(z);
+        if (lvl < 0 || lvl >= view->maps->n_maps) {
+                return NULL;
+        }
+        return view->maps->maps[lvl];
+}

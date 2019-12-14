@@ -245,13 +245,13 @@ static int blocks_fov(int view_x, int view_y, int tile_h)
         return 0;
 }
 
-static bool cutaway_at(point_t view, point_t cursor)
+static bool cutaway_at(point_t vloc, point_t cursor)
 {
-        int margin = 1; //view[Z] > cursor[Z] ? 4 : 3;
-        int cam_x = view_to_camera_x(view[X]);
-        int cam_y = view_to_camera_y(view[Y]);
-        return (between(cam_x, -margin, 7 + view[Z]) &&
-                between(cam_y, -margin, 7 + view[Z]));
+        int margin = 2;         //view[Z] > cursor[Z] ? 4 : 3;
+        int cam_x = view_to_camera_x(vloc[X] - vloc[Z]);
+        int cam_y = view_to_camera_y(vloc[Y] - vloc[Z]);
+        return (between(cam_x, -margin, VIEW_Z_MULT + margin) &&
+                between(cam_y, -margin, VIEW_Z_MULT + margin));
 }
 
 static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
@@ -284,12 +284,13 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
 }
 
 
-static void map_render(map_t * map, SDL_Renderer * renderer,
+static bool map_render(map_t * map, SDL_Renderer * renderer,
                        SDL_Texture ** textures, session_t * session, int map_z)
 {
         SDL_Rect src, dst;
         view_t *view = &session->view;
         int view_z = map_z - view->cursor[Z];
+        bool result = true;
 
         src.x = 0;
         src.y = 0;
@@ -329,13 +330,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                 }
                                 model_t *model = NULL;
                                 int flags = 0;
-
-                                /* Cut away anything that obscures the cursor's
-                                 * immediate area. */
-                                bool cutaway = cutaway_at(vloc, view->cursor);
-                                if (cutaway && view_z > view->cursor[Z]) {
-                                        continue;
-                                }
+                                bool cutaway = false;
 
                                 switch (pixel) {
                                 case PIXEL_VALUE_FLOOR:
@@ -378,6 +373,26 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                         break;
                                 case PIXEL_VALUE_WALL:
                                 case PIXEL_VALUE_TREE:
+
+                                        /* Cut away anything that obscures the cursor's
+                                         * immediate area. */
+                                        cutaway =
+                                            cutaway_at(vloc, view->cursor);
+                                        /* if (cutaway && view_z > view->cursor[Z]) { */
+                                        /*         continue; */
+                                        /* } */
+                                        if (cutaway && map_z == view->cursor[Z]) {
+                                                map_t *map =
+                                                    view_z_to_map(view,
+                                                                  map_z +
+                                                                  VIEW_Z_MULT);
+                                                if (map &&
+                                                    map_get_pixel(map, map_x,
+                                                                  map_y)) {
+                                                        result = false;
+                                                }
+                                        }
+
 
                                         /* Truncate cutaway walls. */
                                         if (cutaway) {
@@ -423,7 +438,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                         }
                 }
         }
-
+        return result;
 }
 
 static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
@@ -440,7 +455,19 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         for (int i = 0; i < session->maps.n_maps; i++) {
                 map_t *map = session->maps.maps[i];
                 int map_z = i * VIEW_Z_MULT;
-                map_render(map, renderer, textures, session, map_z);
+
+                /* But if the cursor is now direcly underneath a tile on a
+                 * higher level, stop rendering higher levels. */
+                if (map_z > view->cursor[Z] &&
+                    map_get_pixel(map, view->cursor[X], view->cursor[Y])) {
+                        break;
+                }
+
+                /* Or if the rendering says to stop, then stop at this level. */
+                if (!map_render(map, renderer, textures, session, map_z)) {
+                        break;
+                }
+
         }
 
         /* Paint the grid */
@@ -493,14 +520,19 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
         point_t vloc = { 0, 0, 0 };
         vloc[X] = screen_to_view_x(event->x, event->y);
         vloc[Y] = screen_to_view_y(event->x, event->y);
+        int cam_x = view_to_camera_x(vloc[X]);
+        int cam_y = view_to_camera_y(vloc[Y]);
         point_t mloc = { 0, 0, 0 };
         view_to_map(view, vloc, mloc);
+        bool cutaway = cutaway_at(vloc, view->cursor);
 
-        printf("s(%d, %d) -> v(%d, %d) -> m(%d, %d) -> %c\n",
+        printf("s(%d, %d)->v(%d, %d)->c(%d, %d)->m(%d, %d)->%c %c\n",
                event->x, event->y,
                vloc[X], vloc[Y],
-               mloc[X], mloc[Y], view_rendered_at(vloc[X],
-                                                  vloc[Y]) ? 't' : 'f');
+               cam_x, cam_y,
+               mloc[X], mloc[Y],
+               view_rendered_at(vloc[X], vloc[Y]) ? 't' : 'f',
+               cutaway ? 't' : 'f');
 }
 
 /**

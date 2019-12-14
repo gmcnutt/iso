@@ -73,5 +73,9 @@ static inline void view_to_map(view_t * view, point_t vloc, point_t mloc)
         mloc[Y] += view->cursor[Y];
 }
 
+/**
+ * Return the map at z, if any.
+ */
+map_t *view_z_to_map(view_t * view, int z);
 
 #endif
