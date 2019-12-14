@@ -256,7 +256,7 @@ static int blocks_fov(int view_x, int view_y, int tile_h)
         return 0;
 }
 
-static bool cutaway_at(point_t vloc, point_t cursor)
+static bool cutaway_at(point_t vloc)
 {
         int margin = 2;
         int cam_x = view_to_camera_x(vloc[X] - vloc[Z]);
@@ -341,12 +341,8 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                 }
                                 model_t *model = NULL;
                                 int flags = 0;
-                                bool cutaway = cutaway_at(vloc, view->cursor);
+                                bool cutaway = !view_z && cutaway_at(vloc);
 
-                                if (cutaway && vloc[Z] > view->cursor[Z]) {
-                                        continue;
-                                }
-                                
                                 switch (pixel) {
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
@@ -396,10 +392,10 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                         /*         continue; */
                                         /* } */
                                         if (cutaway && map_z == view->cursor[Z]) {
-                                                map_t *map =
-                                                    view_z_to_map(view,
-                                                                  map_z +
-                                                                  VIEW_Z_MULT);
+                                                map_t *map = view_z_to_map(view,
+                                                                           map_z
+                                                                           +
+                                                                           VIEW_Z_MULT);
                                                 if (map &&
                                                     map_get_pixel(map, map_x,
                                                                   map_y)) {
@@ -538,7 +534,7 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
         int cam_y = view_to_camera_y(vloc[Y]);
         point_t mloc = { 0, 0, 0 };
         view_to_map(view, vloc, mloc);
-        bool cutaway = cutaway_at(vloc, view->cursor);
+        bool cutaway = cutaway_at(vloc);
 
         printf("s(%d, %d)->v(%d, %d)->c(%d, %d)->m(%d, %d)->%c %c\n",
                event->x, event->y,
@@ -658,7 +654,10 @@ int main(int argc, char **argv)
         }
 
         map_t *map;
-        if (!(map = map_from_image(args.filenames[0] ? args.filenames[0] : "map.png"))) {
+        if (!
+            (map =
+             map_from_image(args.filenames[0] ? args.
+                            filenames[0] : "map.png"))) {
                 goto destroy_textures;
         }
 
