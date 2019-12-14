@@ -17,14 +17,15 @@ Example:
 
     ./demo -i moongate_clearing.png,moongate_clearing_l2.png
 
+You can stack up to 3 maps. They must be the same size.
+
 Key bindings:
 
-<arrow> - move cursor
-',','.' - rotate camera
-'t'     - toggle transparency
+    <arrow> - move cursor
+    .,      - rotate camera
+    t       - toggle transparency
 
-Use the arrow keys to move the red cursor square around. 't' toggles
-transparency. Clicking a tile prints some info on stdout.
+Clicking a tile prints some info on stdout.
 
 ## Maps
 
@@ -45,6 +46,5 @@ passability:
         PIXEL_MASK_OPAQUE = 0x00000100, /* blue bit 0 */
         PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
 
-Opaque terrain blocks field-of-view (FOV). Impassable terrain blocks
-cursor movement.
-
+Opaque terrain blocks field-of-view (FOV). Impassable terrain and no terrain
+blocks cursor movement.
