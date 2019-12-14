@@ -663,7 +663,7 @@ int main(int argc, char **argv)
         }
 
         /* Create the renderer. */
-        if (!(renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC))) {
+        if (!(renderer = SDL_CreateRenderer(window, -1, 0))) {
                 printf("SDL_CreateRenderer: %s\n", SDL_GetError());
                 goto destroy_window;
         }
