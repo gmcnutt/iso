@@ -47,8 +47,7 @@ enum {
 };
 
 struct args {
-        char *filename;
-        char *filename_l2;
+        char *filenames[N_MAPS];
         char *cmd;
         bool fov;
         bool delay;
@@ -103,10 +102,26 @@ static void print_usage(void)
         printf("  -d: disable delay (show true framerate)\n");
         printf("  -f: disable fov\n");
         printf("  -h: help\n");
-        printf("  -i: image filename\n");
+        printf("  -i: image filename (max %d)\n", N_MAPS);
         printf("  -t: enable transparency\n");
 }
 
+static void parse_filenames(struct args *args, char *filenames, int i)
+{
+        char *c = strchr(filenames, ',');
+        if (!c) {
+                return;
+        }
+        if (i >= N_MAPS) {
+                printf("Only %d map files allowed!\n", N_MAPS);
+                print_usage();
+                exit(-1);
+        }
+        *c = '\0';
+        c++;
+        args->filenames[i] = c;
+        parse_filenames(args, c, i + 1);
+}
 
 /**
  * Parse command-line args.
@@ -129,12 +144,8 @@ static void parse_args(int argc, char **argv, struct args *args)
                         args->fov = !args->fov;
                         break;
                 case 'i':
-                        args->filename = optarg;
-                        /* A second level map can follow a comma */
-                        if ((args->filename_l2 = strchr(optarg, ','))) {
-                                *args->filename_l2 = '\0';
-                                args->filename_l2++;
-                        }
+                        args->filenames[0] = optarg;
+                        parse_filenames(args, optarg, 1);
                         break;
                 case 'h':
                         print_usage();
@@ -247,7 +258,7 @@ static int blocks_fov(int view_x, int view_y, int tile_h)
 
 static bool cutaway_at(point_t vloc, point_t cursor)
 {
-        int margin = 2;         //view[Z] > cursor[Z] ? 4 : 3;
+        int margin = 2;
         int cam_x = view_to_camera_x(vloc[X] - vloc[Z]);
         int cam_y = view_to_camera_y(vloc[Y] - vloc[Z]);
         return (between(cam_x, -margin, VIEW_Z_MULT + margin) &&
@@ -330,8 +341,12 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                 }
                                 model_t *model = NULL;
                                 int flags = 0;
-                                bool cutaway = false;
+                                bool cutaway = cutaway_at(vloc, view->cursor);
 
+                                if (cutaway && vloc[Z] > view->cursor[Z]) {
+                                        continue;
+                                }
+                                
                                 switch (pixel) {
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
@@ -346,6 +361,7 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                                      128, 128, 255, flags);
                                         break;
                                 case PIXEL_VALUE_GRASS:
+
                                         dst.x =
                                             view_to_screen_x(view_x, view_y);
                                         dst.y =
@@ -376,8 +392,6 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
 
                                         /* Cut away anything that obscures the cursor's
                                          * immediate area. */
-                                        cutaway =
-                                            cutaway_at(vloc, view->cursor);
                                         /* if (cutaway && view_z > view->cursor[Z]) { */
                                         /*         continue; */
                                         /* } */
@@ -644,14 +658,15 @@ int main(int argc, char **argv)
         }
 
         map_t *map;
-        if (!(map = map_from_image(args.filename ? args.filename : "map.png"))) {
+        if (!(map = map_from_image(args.filenames[0] ? args.filenames[0] : "map.png"))) {
                 goto destroy_textures;
         }
 
         mapstack_add(&session.maps, map);
 
-        if (args.filename_l2) {
-                if (!(map = map_from_image(args.filename_l2))) {
+        for (int i = 1; args.filenames[i]; i++) {
+
+                if (!(map = map_from_image(args.filenames[i]))) {
                         goto destroy_maps;
                 }
                 if ((map_w(map) != mapstack_w(&session.maps)) ||

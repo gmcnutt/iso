@@ -31,6 +31,7 @@ enum {
 enum {
         MAP_FLOOR1,
         MAP_FLOOR2,
+        MAP_FLOOR3,
         N_MAPS
 };
 
