@@ -117,7 +117,6 @@ static void parse_args(int argc, char **argv, struct args *args)
 
         /* Set defaults */
         memset(args, 0, sizeof (*args));
-        args->fov = true;
         args->delay = true;
 
         /* Get user args */
@@ -127,7 +126,7 @@ static void parse_args(int argc, char **argv, struct args *args)
                         args->delay = false;
                         break;
                 case 'f':
-                        args->fov = false;
+                        args->fov = !args->fov;
                         break;
                 case 'i':
                         args->filename = optarg;
