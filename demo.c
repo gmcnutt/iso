@@ -283,54 +283,6 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
         }
 }
 
-/**
- * Given a wall section W, look at its left (or right) neighbor to decide if we
- * should not render W's left (or right) face. If the neighbor is a wall in fov
- * and is going to be rendered tall then do not render the face, because the
- * neighbor is going to cover it up. Not only would rendering it be a wasted
- * operation, but if we are transparent then the extra edges are visually
- * confusing.
- */
-static bool eclipsed_by(view_t * view, map_t * map, point_t nview, bool cutaway, int map_z)
-{
-        point_t nmap = {0, 0, map_z};
-        view_to_map(view, nview, nmap);
-
-        /* Is there a wall there? */
-        if (!map_opaque_at(map, nmap[X], nmap[Y])) {
-                /* No. */
-                return false;
-        }
-
-        /* Yes, is the wall in fov? */
-        if (!view_in_fov(view, nmap)) {
-                /* No. */
-                return false;
-        }
-
-        /* Yes, is it actually in the view rect? */
-        if (nview[X] >= VIEW_W || nview[Y] >= VIEW_H) {
-                /* No. */
-                return false;
-        }
-
-        /* Yes, is this wall section clipped? */
-        if (cutaway) {
-                /* Yes. So the neighbor will eclipse it, even if the neighbor
-                 * is also clipped. */
-                return true;
-        }
-
-        /* No, is the neighbor clipped? */
-        if (cutaway_at(nview, view->cursor)) {
-                /* Yes. And since we're not, it won't eclipse our upper
-                 * portion. */
-                return false;
-        }
-
-        /* No, the neighbor is full-sized. */
-        return true;
-}
 
 static void map_render(map_t * map, SDL_Renderer * renderer,
                        SDL_Texture ** textures, session_t * session, int map_z)
@@ -338,7 +290,6 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
         SDL_Rect src, dst;
         view_t *view = &session->view;
         int view_z = map_z - view->cursor[Z];
-        point_t nview = { 0, 0, view_z };
 
         src.x = 0;
         src.y = 0;
@@ -369,7 +320,7 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                         }
 
                         /* Draw the terrain */
-                        if (view_in_fov(view, mloc)) {
+                        {
                                 pixel_t pixel =
                                     map_get_pixel(map, map_x, map_y);
                                 if (!pixel) {
@@ -441,26 +392,6 @@ static void map_render(map_t * map, SDL_Renderer * renderer,
                                                        model->tile_h)) {
                                                 flags |=
                                                     MODEL_RENDER_FLAG_TRANSPARENT;
-                                        }
-
-                                        /* Don't blit faces that overlap faces
-                                         * behind them. */
-                                        nview[X] = view_x;
-                                        nview[Y] = view_y + 1;
-                                        if (eclipsed_by
-                                            (view, map, nview,
-                                             cutaway, map_z)) {
-                                                flags |=
-                                                    MODEL_RENDER_FLAG_SKIPLEFT;
-                                        }
-
-                                        nview[X] = view_x + 1;
-                                        nview[Y] = view_y;
-                                        if (eclipsed_by
-                                            (view, map, nview,
-                                             cutaway, map_z)) {
-                                                flags |=
-                                                    MODEL_RENDER_FLAG_SKIPRIGHT;
                                         }
 
                                         if (pixel == PIXEL_VALUE_WALL) {
