@@ -23,7 +23,7 @@ typedef SDL_Surface map_t;
    .... .... .... .... .... .... XXXX XXXX |Alpha
    .... .... .... .... .... ...X .... .... |1=opaque
    .... .... .... .... .... ..X. .... .... |1=impassable
-   .... .XXX .... .... .... ..X. .... .... |Model type (MODEL_XXX enum)
+   .... .XXX .... .... .... .... .... .... |Model type (MODEL_XXX enum)
    XXXX .... XXXX .... XXXX .... .... .... |Terrain ID (and model tint)
    .... X... .... XXXX .... XX.. .... .... |Reserved
  */
@@ -31,16 +31,16 @@ typedef SDL_Surface map_t;
 #define PIXEL_RED(p) (Uint8)((p)>>24 & 0xf0)
 #define PIXEL_GREEN(p) (Uint8)((p)>>16 & 0xf0)
 #define PIXEL_BLUE(p) (Uint8)((p)>>8 & 0xf0)
-#define PIXEL_MODEL(p) ((p) & PIXEL_MASK_MODEL)
-#define PIXEL_HEIGHT(p) ((p) & PIXEL_MASK_HEIGHT)
+#define PIXEL_MODEL(p) (Uint8)(((p) & PIXEL_MASK_MODEL) >> 24)
+#define PIXEL_HEIGHT(p) (Uint8)(((p) & PIXEL_MASK_HEIGHT) >> 24)
 #define PIXEL_IS_OPAQUE(p) ((p) & PIXEL_MASK_OPAQUE)
 #define PIXEL_IS_IMPASSABLE(p) ((p) & PIXEL_MASK_IMPASSABLE)
 
 enum {
-        PIXEL_MASK_OPAQUE = 0x00000100,
+        PIXEL_MASK_OPAQUE =     0x00000100,
         PIXEL_MASK_IMPASSABLE = 0x00000200,
-        PIXEL_MASK_MODEL = 0xf0f0f0000,
-        PIXEL_MASK_HEIGHT = 0x07000000,
+        PIXEL_MASK_MODEL =      0x0f000000,
+        PIXEL_MASK_HEIGHT =     0x07000000,
 };
 
 enum {
@@ -50,7 +50,6 @@ enum {
 enum {
         PIXEL_VALUE_TREE = 0x004001ff,
         PIXEL_VALUE_GRASS = 0x00ff00ff,
-        PIXEL_VALUE_FLOOR = 0x0000f0ff,
         PIXEL_VALUE_WALL = 0xffffffff
 };
 
