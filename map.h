@@ -23,26 +23,35 @@ typedef SDL_Surface map_t;
    .... .... .... .... .... .... XXXX XXXX |Alpha
    .... .... .... .... .... ...X .... .... |1=opaque
    .... .... .... .... .... ..X. .... .... |1=impassable
-   .... .XXX .... .... .... ..X. .... .... |Height (0=ground, 5=full)
+   .... .XXX .... .... .... ..X. .... .... |Height (ground=0, full>=5)
    XXXX .... XXXX .... XXXX .... .... .... |Terrain type
    .... X... .... XXXX .... XX.. .... .... |Reserved
  */
 
-#define PIXEL(r,g,b,o,i,h)
+#define PIXEL_TYPE(p) ((p) (p) & PIXEL_MASK_TYPE)
+#define PIXEL_HEIGHT(p) ((p) (p) & PIXEL_MASK_HEIGHT)
+#define PIXEL_IS_OPAQUE(p) ((p) & PIXEL_MASK_OPAQUE)
+#define PIXEL_IS_IMPASSABLE(p) ((p) & PIXEL_MASK_IMPASSABLE)
+
+enum {
+        PIXEL_MASK_OPAQUE = 0x00000100,
+        PIXEL_MASK_IMPASSABLE = 0x00000200,
+        PIXEL_MASK_TYPE = 0xf0f0f0000,
+        PIXEL_MASK_HEIGHT = 0x07000000,
+};
+
+enum {
+        PIXEL_TYPE_WALL = 0xf0f0f000
+};
 
 enum {
         PIXEL_VALUE_TREE = 0x004001ff,
         PIXEL_VALUE_SHRUB = 0x008000ff,
         PIXEL_VALUE_GRASS = 0x00ff00ff,
         PIXEL_VALUE_FLOOR = 0x0000f0ff,
-        PIXEL_VALUE_WALL = 0xffffffff,
-        PIXEL_VALUE_1x1x1 = 0xff00fdff,
+        PIXEL_VALUE_WALL = 0xffffffff
 };
 
-enum {
-        PIXEL_MASK_OPAQUE = 0x00000100, /* blue bit 0 */
-        PIXEL_MASK_IMPASSABLE = 0x00000200      /* blue bit 1 */
-};
 
 enum {
         MAP_FLOOR1,
