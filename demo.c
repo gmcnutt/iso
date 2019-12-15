@@ -367,7 +367,7 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                 int flags = 0;
                                 bool cutaway = !view_z && cutaway_at(vloc);
 
-                                switch (pixel) {
+                                switch(pixel) {
                                 case PIXEL_VALUE_FLOOR:
                                         model = &models[MODEL_SHORT];
                                         if (session->transparency &&
@@ -383,10 +383,10 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                 case PIXEL_VALUE_GRASS:
 
                                         dst.x =
-                                            view_to_screen_x(view_x, view_y);
+                                                view_to_screen_x(view_x, view_y);
                                         dst.y =
-                                            view_to_screen_y(view_x, view_y,
-                                                             view_z);
+                                                view_to_screen_y(view_x, view_y,
+                                                                 view_z);
                                         dst.w = TILE_WIDTH;
                                         dst.h = TILE_HEIGHT;
 
@@ -439,7 +439,7 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                             blocks_fov(view_x, view_y,
                                                        model->tile_h)) {
                                                 flags |=
-                                                    MODEL_RENDER_FLAG_TRANSPARENT;
+                                                        MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
 
                                         if (pixel == PIXEL_VALUE_WALL) {
@@ -454,19 +454,27 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                                              64, flags);
                                         }
                                         break;
-                                case PIXEL_VALUE_SHRUB:
-                                        model_render(renderer,
-                                                     &models[MODEL_SHORT],
-                                                     view_x, view_y, view_z,
-                                                     128, 255, 128, flags);
-                                        break;
                                 default:
-                                        printf
-                                            ("Unknown pixel value: 0x%08x at (%d, %d, %d)\n",
-                                             pixel, map_x, map_y, view_z);
-                                        break;
+                                        switch(PIXEL_MODEL(pixel)) {
+                                        case MODEL_SHORT:
+                                                model = &models[MODEL_SHORT];
+                                                if (session->transparency &&
+                                                    blocks_fov(view_x, view_y,
+                                                               model->tile_h)) {
+                                                        flags |=
+                                                                MODEL_RENDER_FLAG_TRANSPARENT;
+                                                }
+                                                model_render(renderer, model,
+                                                             view_x, view_y, view_z,
+                                                             PIXEL_RED(pixel), PIXEL_GREEN(pixel), PIXEL_BLUE(pixel), flags);
+                                                break;
+                                        default:
+                                                printf
+                                                        ("Unknown pixel value: 0x%08x at (%d, %d, %d)\n",
+                                                         pixel, map_x, map_y, view_z);
+                                                break;
+                                        }
                                 }
-
                                 view_set_rendered(view_x, view_y,
                                                   model ? model->tile_h : 1);
                         }
