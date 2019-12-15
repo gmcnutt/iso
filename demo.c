@@ -20,19 +20,31 @@ enum {
 
 enum {
         TEXTURE_GRASS,
-        TEXTURE_LEFTTALL,
-        TEXTURE_RIGHTTALL,
+        TEXTURE_5x1x1LEFT,
+        TEXTURE_5x1x1RIGHT,
         TEXTURE_TOP,
         TEXTURE_LEFTSHORT,
         TEXTURE_RIGHTSHORT,
         TEXTURE_INTERIOR,
+        TEXTURE_1x1x1LEFT,
+        TEXTURE_1x1x1RIGHT,
+        TEXTURE_2x1x1LEFT,
+        TEXTURE_2x1x1RIGHT,
+        TEXTURE_3x1x1LEFT,
+        TEXTURE_3x1x1RIGHT,
+        TEXTURE_4x1x1LEFT,
+        TEXTURE_4x1x1RIGHT,
         N_TEXTURES
 };
 
 enum {
-        MODEL_TALL,
         MODEL_SHORT,
         MODEL_INTERIOR,
+        MODEL_1x1x1,
+        MODEL_2x1x1,
+        MODEL_3x1x1,
+        MODEL_4x1x1,
+        MODEL_5x1x1,
         N_MODELS
 };
 
@@ -74,18 +86,30 @@ typedef struct {
 
 static const char *texture_files[] = {
         "grass.png",
-        "gray_left.png",
-        "gray_right.png",
-        "gray_top.png",
+        "5x1x1-left.png",
+        "5x1x1-right.png",
+        "1x1-top.png",
         "short_gray_left.png",
         "short_gray_right.png",
-        "gray_interior.png"
+        "gray_interior.png",
+        "1x1x1-left.png",
+        "1x1x1-right.png",
+        "2x1x1-left.png",
+        "2x1x1-right.png",
+        "3x1x1-left.png",
+        "3x1x1-right.png",
+        "4x1x1-left.png",
+        "4x1x1-right.png",
 };
 
 static const size_t texture_indices[N_MODELS][N_MODEL_FACES] = {
-        {TEXTURE_LEFTTALL, TEXTURE_RIGHTTALL, TEXTURE_TOP},     /* tall */
-        {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_TOP},   /* short */
-        {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_INTERIOR}       /* interior */
+        {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_TOP},
+        {TEXTURE_LEFTSHORT, TEXTURE_RIGHTSHORT, TEXTURE_INTERIOR},
+        {TEXTURE_1x1x1LEFT, TEXTURE_1x1x1RIGHT, TEXTURE_TOP},
+        {TEXTURE_2x1x1LEFT, TEXTURE_2x1x1RIGHT, TEXTURE_TOP},
+        {TEXTURE_3x1x1LEFT, TEXTURE_3x1x1RIGHT, TEXTURE_TOP},
+        {TEXTURE_4x1x1LEFT, TEXTURE_4x1x1RIGHT, TEXTURE_TOP},
+        {TEXTURE_5x1x1LEFT, TEXTURE_5x1x1RIGHT, TEXTURE_TOP}
 };
 
 
@@ -325,7 +349,7 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                         if (view_z == 0 &&
                             map_x == view->cursor[X] &&
                             map_y == view->cursor[Y]) {
-                                model_render(renderer, &models[MODEL_TALL],
+                                model_render(renderer, &models[MODEL_5x1x1],
                                              view_x, view_y, view_z, 255, 128,
                                              64, 0);
                                 continue;
@@ -408,7 +432,7 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                         if (cutaway) {
                                                 model = &models[MODEL_INTERIOR];
                                         } else {
-                                                model = &models[MODEL_TALL];
+                                                model = &models[MODEL_5x1x1];
                                         }
 
                                         if (session->transparency &&

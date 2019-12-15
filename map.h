@@ -15,12 +15,28 @@
 typedef uint32_t pixel_t;
 typedef SDL_Surface map_t;
 
+/* 
+   Pixel bits
+
+   Red       Green     Blue      Alpha     |Color channels
+   7654 3210 7654 3210 7654 3210 7653 3210 |Bit numbers in channel
+   .... .... .... .... .... .... XXXX XXXX |Alpha
+   .... .... .... .... .... ...X .... .... |1=opaque
+   .... .... .... .... .... ..X. .... .... |1=impassable
+   .... .XXX .... .... .... ..X. .... .... |Height (0=ground, 5=full)
+   XXXX .... XXXX .... XXXX .... .... .... |Terrain type
+   .... X... .... XXXX .... XX.. .... .... |Reserved
+ */
+
+#define PIXEL(r,g,b,o,i,h)
+
 enum {
         PIXEL_VALUE_TREE = 0x004001ff,
         PIXEL_VALUE_SHRUB = 0x008000ff,
         PIXEL_VALUE_GRASS = 0x00ff00ff,
         PIXEL_VALUE_FLOOR = 0x0000f0ff,
-        PIXEL_VALUE_WALL = 0xffffffff
+        PIXEL_VALUE_WALL = 0xffffffff,
+        PIXEL_VALUE_1x1x1 = 0xff00fdff,
 };
 
 enum {
