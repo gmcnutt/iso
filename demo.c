@@ -68,19 +68,23 @@ struct args {
 
 typedef struct {
         view_t view;
-        mapstack_t maps;
+        area_t area;
         bool transparency;
 } session_t;
 
 #define FPS 60
+#define MODEL_H2I(h) clamp((h), 0, N_MODELS - 1)
+#define MODEL_I2H(i) (i)
 #define TILE_HEIGHT 18
 #define TILE_HEIGHT_HALF (TILE_HEIGHT / 2)
 #define TILE_WIDTH 36
 #define TILE_WIDTH_HALF (TILE_WIDTH / 2)
 #define TICK_PER_FRAME (1000 / FPS)
 
+
 #define between(x, l, r) (((l) < (x)) && (x) < (r))
 #define between_inc(x, l, r) (((l) <= (x)) && (x) <= (r))
+#define clamp(x, a, b) ((x) < (a) ? (x) : ((x) > (b) ? (b) : (x)))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -283,12 +287,18 @@ static int blocks_fov(int view_x, int view_y, int tile_h)
 static bool cutaway_at(point_t vloc)
 {
         int margin = 1;
-        int cam_x = view_to_camera_x(vloc[X] - vloc[Z]);
-        int cam_y = view_to_camera_y(vloc[Y] - vloc[Z]);
-        return (between(cam_x, -margin, VIEW_Z_MULT + margin) &&
-                between(cam_y, -margin, VIEW_Z_MULT + margin));
+        int cam_x = view_to_camera_x(vloc[X]/* - vloc[Z]*/);
+        int cam_y = view_to_camera_y(vloc[Y]/* - vloc[Z]*/);
+        return (cam_x > 0 && cam_y > 0);
+        return (between(cam_x, -margin, Z_PER_LEVEL + margin) &&
+                between(cam_y, -margin, Z_PER_LEVEL + margin));
 }
 
+/**
+ * The view coordinates overlay the map and follow the cursor around with an
+ * origin at a fixed (x, y) distance from the cursor. The view z coordinate is
+ * offset from the cursor z.
+ */
 static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
                          int view_y, int view_z, Uint8 red, Uint8 grn,
                          Uint8 blu, int flags)
@@ -311,7 +321,7 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
                 dst.x = view_to_screen_x(view_x, view_y) + offset->x;
                 dst.y = view_to_screen_y(view_x, view_y, view_z) - offset->y;
                 Uint8 alpha =
-                    (flags & MODEL_RENDER_FLAG_TRANSPARENT) ? 128 : 255;
+                        (flags & MODEL_RENDER_FLAG_TRANSPARENT) ? 128 : 255;
                 SDL_SetTextureAlphaMod(texture, alpha);
                 SDL_SetTextureColorMod(texture, red, grn, blu);
                 SDL_RenderCopy(renderer, texture, NULL, &dst);
@@ -319,14 +329,21 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
 }
 
 
-static bool map_render(map_t * map, SDL_Renderer * renderer,
-                       SDL_Texture ** textures, session_t * session, int map_z)
+static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
+                         session_t * session, area_t *area, int map_level)
 {
         SDL_Rect src, dst;
         view_t *view = &session->view;
-        int view_z = map_z - view->cursor[Z];
+        int cursor_level = Z2L(view->cursor[Z]);
+        int map_z = map_level * Z_PER_LEVEL;
+        //int view_z = (map_level - cursor_level) * Z_PER_LEVEL;
+        int view_z = (map_z - view->cursor[Z]);
+        static const int cursor_h = Z_PER_LEVEL;
+        int cursor_top_z = view->cursor[Z] + cursor_h;
         bool clipped_pillar = false;
         bool top_of_stairs = false;
+        bool enable_cutaway = cursor_level == map_level || cursor_top_z > map_z;
+        map_t *map = area_get_map_at_level(area, map_level);
 
         src.x = 0;
         src.y = 0;
@@ -337,7 +354,7 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
         for (int view_y = 0; view_y < VIEW_H; view_y++) {
                 for (int view_x = 0; view_x < VIEW_W; view_x++) {
                         point_t vloc = { view_x, view_y, view_z };
-                        point_t mloc = { 0, 0, map_z };
+                        point_t mloc = { 0, 0, 0 };
                         view_to_map(view, vloc, mloc);
                         int map_y = mloc[Y];
                         int map_x = mloc[X];
@@ -349,131 +366,120 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
 
 
                         /* Draw the terrain */
-                        {
-                                pixel_t pixel =
-                                    map_get_pixel(map, map_x, map_y);
-                                if (!pixel) {
-                                        /* transparent, nothing there */
-                                        continue;
+                        pixel_t pixel =
+                                map_get_pixel(map, map_x, map_y);
+                        if (!pixel) {
+                                /* transparent, nothing there */
+                                goto draw_cursor;
+                        }
+                        model_t *model = NULL;
+                        int flags = 0;
+
+                        switch (pixel) {
+                        case PIXEL_VALUE_GRASS:
+
+                                dst.x =
+                                        view_to_screen_x(view_x, view_y);
+                                dst.y =
+                                        view_to_screen_y(view_x, view_y,
+                                                         view_z);
+                                dst.w = TILE_WIDTH;
+                                dst.h = TILE_HEIGHT;
+
+
+                                if (session->transparency &&
+                                    blocks_fov(view_x, view_y, 1)) {
+                                        SDL_SetTextureAlphaMod(textures
+                                                               [TEXTURE_GRASS],
+                                                               128);
+                                } else {
+
+                                        SDL_SetTextureAlphaMod(textures
+                                                               [TEXTURE_GRASS],
+                                                               255);
                                 }
-                                model_t *model = NULL;
-                                int flags = 0;
 
-                                switch (pixel) {
-                                case PIXEL_VALUE_GRASS:
-
-                                        dst.x =
-                                            view_to_screen_x(view_x, view_y);
-                                        dst.y =
-                                            view_to_screen_y(view_x, view_y,
-                                                             view_z);
-                                        dst.w = TILE_WIDTH;
-                                        dst.h = TILE_HEIGHT;
-
-
+                                SDL_RenderCopy(renderer,
+                                               textures[TEXTURE_GRASS],
+                                               &src, &dst);
+                                break;
+                        default:
+                                model_index = PIXEL_MODEL(pixel);
+                                if (model_index >= N_MODELS) {
+                                        printf
+                                                ("Unknown pixel value: 0x%08x at (%d, %d, %d) model %d\n",
+                                                 pixel, map_x, map_y,
+                                                 view_z, model_index);
+                                } else {
+                                        model = &models[model_index];
                                         if (session->transparency &&
-                                            blocks_fov(view_x, view_y, 1)) {
-                                                SDL_SetTextureAlphaMod(textures
-                                                                       [TEXTURE_GRASS],
-                                                                       128);
-                                        } else {
-
-                                                SDL_SetTextureAlphaMod(textures
-                                                                       [TEXTURE_GRASS],
-                                                                       255);
+                                            blocks_fov(view_x, view_y,
+                                                       model->tile_h)) {
+                                                flags |=
+                                                        MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
 
-                                        SDL_RenderCopy(renderer,
-                                                       textures[TEXTURE_GRASS],
-                                                       &src, &dst);
-                                        break;
-                                default:
-                                        model_index = PIXEL_MODEL(pixel);
-                                        if (model_index >= N_MODELS) {
-                                                printf
-                                                    ("Unknown pixel value: 0x%08x at (%d, %d, %d) model %d\n",
-                                                     pixel, map_x, map_y,
-                                                     view_z, model_index);
-                                        } else {
-                                                model = &models[model_index];
-                                                if (session->transparency &&
-                                                    blocks_fov(view_x, view_y,
-                                                               model->tile_h)) {
-                                                        flags |=
-                                                            MODEL_RENDER_FLAG_TRANSPARENT;
-                                                }
+                                        if (PIXEL_IS_OPAQUE(pixel) &&
+                                            !PIXEL_IS_STAIRS(pixel)) {
 
-                                                if (PIXEL_IS_OPAQUE(pixel) &&
-                                                    !PIXEL_IS_STAIRS(pixel)) {
-                                                        /* Cut away walls if
-                                                         * they are on the same
-                                                         * level as the
-                                                         * cursor. */
-                                                        bool cutaway = !view_z
-                                                            && cutaway_at(vloc);
+                                                /* Cut away walls if they are on the same level as the cursor. */
+                                                bool cutaway = enable_cutaway && cutaway_at(vloc);
 
-                                                        /* Cut away the ceiling
-                                                         * if we cut away a
-                                                         * wall that has a
-                                                         * ceiling. */
-                                                        if (cutaway &&
-                                                            map_z ==
-                                                            view->cursor[Z]) {
-                                                                map_t *map =
-                                                                    view_z_to_map
-                                                                    (view,
-                                                                     map_z +
-                                                                     VIEW_Z_MULT);
-                                                                if (map &&
-                                                                    map_get_pixel
-                                                                    (map, map_x,
-                                                                     map_y)) {
-                                                                        clipped_pillar
-                                                                            =
-                                                                            true;
+                                                if (cutaway) {
+
+                                                        /* Use truncated model. */
+                                                        model = &models [MODEL_INTERIOR];
+
+                                                        /* Check for a ceiling on a clipped wall. */
+                                                        if (!clipped_pillar && map_level == cursor_level) {
+                                                                map_t *map = area_get_map_at_level(area, map_level + 1);
+                                                                if (map && map_get_pixel (map, map_x, map_y)) {
+                                                                        clipped_pillar = true;
                                                                 }
                                                         }
-
-
-                                                        /* Use the alternate
-                                                         * truncated model for
-                                                         * cutaway walls. */
-                                                        if (cutaway) {
-                                                                model =
-                                                                    &models
-                                                                    [MODEL_INTERIOR];
-                                                        }
                                                 }
-
-                                                model_render(renderer, model,
-                                                             view_x, view_y,
-                                                             view_z,
-                                                             PIXEL_RED(pixel),
-                                                             PIXEL_GREEN(pixel),
-                                                             PIXEL_BLUE(pixel),
-                                                             flags);
                                         }
-                                        break;
-                                }
-                                view_set_rendered(view_x, view_y,
-                                                  model ? model->tile_h : 1);
 
-                                /* Draw the cursor if this is where it is. */
-                                if (view_z == 0 &&
-                                    map_x == view->cursor[X] &&
-                                    map_y == view->cursor[Y]) {
-                                        int off_z = 0;
-                                        if (PIXEL_IS_STAIRS(pixel)) {
-                                                off_z = model_index;
-                                                top_of_stairs =
-                                                    model_index == MODEL_4x1x1;
-                                        }
-                                        model_render(renderer,
-                                                     &models[MODEL_5x1x1],
+                                        model_render(renderer, model,
                                                      view_x, view_y,
-                                                     view_z + off_z, 255, 128,
-                                                     64, 0);
+                                                     view_z,
+                                                     PIXEL_RED(pixel),
+                                                     PIXEL_GREEN(pixel),
+                                                     PIXEL_BLUE(pixel),
+                                                     flags);
                                 }
+                                break;
+                        }
+                        view_set_rendered(view_x, view_y,
+                                          model ? model->tile_h : 1);
+
+                draw_cursor:
+                        /* Draw the cursor if this is where it is. */
+                        if (cursor_top_z > map_z &&
+                            map_x == view->cursor[X] &&
+                            map_y == view->cursor[Y]) {
+                                int off_z = 0;
+
+                                /* Model is sticking up from map below, shorten it. */
+                                if (view->cursor[Z] < map_z) {
+                                        model = &models[MODEL_H2I(cursor_top_z - map_z)];
+                                } else {
+                                        model = &models[MODEL_5x1x1];
+                                }
+
+                                /* If cursor is on the stairs offset it up. Note
+                                 * if it is on top of the stairs, we'll show
+                                 * the next level in that case. */
+                                if (PIXEL_IS_STAIRS(pixel)) {
+                                        off_z = model_index; /* height of model */
+                                        top_of_stairs = true;
+                                        //top_of_stairs = model_index == MODEL_4x1x1;
+                                }
+                                model_render(renderer,
+                                             model,
+                                             view_x, view_y,
+                                             view_z + off_z, 255, 128,
+                                             64, 0);
                         }
                 }
         }
@@ -481,10 +487,14 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
         return !clipped_pillar || top_of_stairs;
 }
 
-static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
-                            session_t * session)
+static void render(SDL_Renderer * renderer, SDL_Texture ** textures,
+                   session_t * session)
 {
+        clear_screen(renderer);
+
         view_t *view = &session->view;
+        int cursor_level = Z2L(view->cursor[Z]);
+
         /* Clear the rendered buffer */
         view_clear_rendered();
 
@@ -492,19 +502,22 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         view_calc_fov(view);
 
         /* Render the maps in z order */
-        for (int i = 0; i < session->maps.n_maps; i++) {
-                map_t *map = session->maps.maps[i];
-                int map_z = i * VIEW_Z_MULT;
+        for (int i = 0; i < session->area.n_maps; i++) {
+                map_t *map = session->area.maps[i];
 
-                /* But if the cursor is now direcly underneath a tile on a
-                 * higher level, stop rendering higher levels. */
-                if (map_z > view->cursor[Z] &&
+                /* But if the cursor is now directly underneath a tile on a
+                 * higher level, stop rendering higher levels. This implements
+                 * roof clipping. What if the cursor is standing under a hole?
+                 * The roof won't get clipped, I think, when it probably
+                 * should. */
+                if ((i > cursor_level) &&
                     map_get_pixel(map, view->cursor[X], view->cursor[Y])) {
                         break;
                 }
 
-                /* Or if the rendering says to stop, then stop at this level. */
-                if (!map_render(map, renderer, textures, session, map_z)) {
+                /* Or if the rendering says to stop, then clip the higher
+                 * levels. */
+                if (!render_level(renderer, textures, session, &session->area, i)) {
                         break;
                 }
 
@@ -519,13 +532,7 @@ static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
         map_to_view(vloc, view->cursor, view->cursor);
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
         iso_square(renderer, VIEW_H, vloc[X], vloc[Y]);
-}
 
-static void render(SDL_Renderer * renderer, SDL_Texture ** textures,
-                   session_t * session)
-{
-        clear_screen(renderer);
-        render_iso_test(renderer, textures, session);
         SDL_RenderPresent(renderer);
 }
 
@@ -575,11 +582,42 @@ void on_mouse_button(SDL_MouseButtonEvent * event, session_t * session)
                cutaway ? 't' : 'f');
 }
 
+bool move_cursor(area_t *area, view_t * view, const point_t dir)
+{
+        point_t newcur, rdir;
+        map_t *map;
+
+        point_copy(newcur, view->cursor);
+        point_copy(rdir, dir);
+        rdir[Z] = L2Z(dir[Z]);  /* dir z is # levels */
+        point_rotate(rdir, view->rotation);
+        point_translate(newcur, rdir);
+        while ((map = area_get_map_at_level(area, Z2L(newcur[Z]))) &&
+               map_contains(map, newcur[X], newcur[Y])) {
+                pixel_t pix = map_get_pixel(map, newcur[X], newcur[Y]);
+                if (! pix) {
+                        /* Hole in the map, try the next level down... */
+                        newcur[Z] -= Z_PER_LEVEL;
+                } else {
+                        if (!PIXEL_IS_IMPASSABLE(pix)) {
+                                point_copy(view->cursor, newcur);
+                                int lvl_z = L2Z(Z2L(view->cursor[Z]));
+                                view->cursor[Z] = (PIXEL_HEIGHT(pix) + lvl_z);
+                                return true;
+                        }
+                        return false;
+                }
+        }
+        return false;
+}
+
+
 /**
  * Handle key presses.
  */
 void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
 {
+        area_t *area = &session->area;
         view_t *view = &session->view;
         static const point_t directions[N_DIR] = {
                 {-1, 0, 0},     /* left */
@@ -592,22 +630,22 @@ void on_keydown(SDL_KeyboardEvent * event, int *quit, session_t * session)
 
         switch (event->keysym.sym) {
         case SDLK_LEFT:
-                view_move_cursor(view, directions[DIR_XLEFT]);
+                move_cursor(area, view, directions[DIR_XLEFT]);
                 break;
         case SDLK_RIGHT:
-                view_move_cursor(view, directions[DIR_XRIGHT]);
+                move_cursor(area, view, directions[DIR_XRIGHT]);
                 break;
         case SDLK_UP:
-                view_move_cursor(view, directions[DIR_YUP]);
+                move_cursor(area, view, directions[DIR_YUP]);
                 break;
         case SDLK_DOWN:
-                view_move_cursor(view, directions[DIR_YDOWN]);
+                move_cursor(area, view, directions[DIR_YDOWN]);
                 break;
         case SDLK_PAGEUP:
-                view_move_cursor(view, directions[DIR_ZUP]);
+                move_cursor(area, view, directions[DIR_ZUP]);
                 break;
         case SDLK_PAGEDOWN:
-                view_move_cursor(view, directions[DIR_ZDOWN]);
+                move_cursor(area, view, directions[DIR_ZDOWN]);
                 break;
         case SDLK_q:
                 *quit = 1;
@@ -691,22 +729,22 @@ int main(int argc, char **argv)
                 goto destroy_textures;
         }
 
-        mapstack_add(&session.maps, map);
+        area_add(&session.area, map);
 
         for (int i = 1; args.filenames[i]; i++) {
 
                 if (!(map = map_from_image(args.filenames[i]))) {
                         goto destroy_maps;
                 }
-                if ((map_w(map) != mapstack_w(&session.maps)) ||
-                    (map_h(map) != mapstack_h(&session.maps))) {
+                if ((map_w(map) != area_w(&session.area)) ||
+                    (map_h(map) != area_h(&session.area))) {
                         printf("Maps must be same size!\n");
                         goto destroy_maps;
                 }
-                mapstack_add(&session.maps, map);
+                area_add(&session.area, map);
         }
 
-        view_init(&session.view, &session.maps, args.fov);
+        view_init(&session.view, &session.area, args.fov);
 
         start_ticks = SDL_GetTicks();
         pre_tick = SDL_GetTicks();
@@ -753,7 +791,7 @@ int main(int argc, char **argv)
         if (end_ticks > start_ticks) {
                 printf("%2.2f FPS\n",
                        ((double)frames * 1000) / (end_ticks - start_ticks)
-                    );
+                        );
                 printf("%f msecs avg loop times\n", (total_used / frames));
                 if (args.delay) {
                         printf("%f msecs avg delay\n", (total_delay / frames));
@@ -761,8 +799,8 @@ int main(int argc, char **argv)
         }
 destroy_maps:
         for (int i = 0; i < N_MAPS; i++) {
-                if (session.maps.maps[i]) {
-                        map_free(session.maps.maps[i]);
+                if (session.area.maps[i]) {
+                        map_free(session.area.maps[i]);
                 }
         }
 

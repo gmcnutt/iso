@@ -9,7 +9,7 @@
 #include "map.h"
 #include <SDL2/SDL_image.h>
 
-map_t *mapstack_get(mapstack_t * ms, int i)
+map_t *area_get_map_at_level(area_t * ms, int i)
 {
         if (i < 0 || i >= ms->n_maps) {
                 return NULL;
@@ -17,7 +17,7 @@ map_t *mapstack_get(mapstack_t * ms, int i)
         return ms->maps[i];
 }
 
-bool mapstack_add(mapstack_t * ms, map_t * map)
+bool area_add(area_t * ms, map_t * map)
 {
         if (ms->n_maps >= N_MAPS) {
                 return false;

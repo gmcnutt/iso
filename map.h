@@ -38,6 +38,10 @@ typedef SDL_Surface map_t;
 #define PIXEL_IS_IMPASSABLE(p) ((p) & PIXEL_MASK_IMPASSABLE)
 #define PIXEL_IS_STAIRS(p) ((p) & PIXEL_MASK_STAIRS)
 
+#define Z_PER_LEVEL 5
+#define Z2L(z) ((z) / Z_PER_LEVEL)
+#define L2Z(l) ((l) * Z_PER_LEVEL)
+
 enum {
         PIXEL_MASK_OPAQUE = 0x00000100,
         PIXEL_MASK_IMPASSABLE = 0x00000200,
@@ -66,10 +70,10 @@ typedef struct {
         map_t *maps[N_MAPS];
         int n_maps;
         int w, h;
-} mapstack_t;
+} area_t;
 
-#define mapstack_w(ms) ((ms)->w)
-#define mapstack_h(ms) ((ms)->h)
+#define area_w(ms) ((ms)->w)
+#define area_h(ms) ((ms)->h)
 
 #define map_opaque_at(m, x, y) (map_get_pixel((m), (x), (y)) & PIXEL_MASK_OPAQUE)
 #define map_contains(m, x, y) (((x) >= 0 && (x) < map_w(m)) && ((y) >= 0 && (y) < map_h(m)))
@@ -84,12 +88,12 @@ typedef struct {
 /**
  * Get the map at index i, or NULL if none or out-of-bounds.
  */
-map_t *mapstack_get(mapstack_t * ms, int i);
+map_t *area_get_map_at_level(area_t * ms, int i);
 
 /**
  * Add a map to the stack.
  */
-bool mapstack_add(mapstack_t * ms, map_t * map);
+bool area_add(area_t * ms, map_t * map);
 
 /**
  * Get the pixel at the given map location.

@@ -15,7 +15,6 @@
 
 #define VIEW_H 35
 #define VIEW_W 35
-#define VIEW_Z_MULT 5           /* Distance in tiles to offset maps vertically. */
 
 /* The isometric view is rotated 45 degrees clockwise. This means the tile at
  * the lower left corner of the view (0, VIEW_H) should be at the left of the
@@ -25,33 +24,20 @@
 typedef struct {
         point_t cursor;
         rotation_t rotation;
-        mapstack_t *maps;       /* all maps */
-        map_t *map;             /* current map */
         fov_map_t fovs[N_MAPS]; /* one per map */
+        int n_fovs;
 } view_t;
 
 /**
  * Initialize the already-allocated view.
  */
-int view_init(view_t * view, mapstack_t * maps, bool use_fov);
+int view_init(view_t * view, area_t * maps, bool use_fov);
 void view_deinit(view_t * view);
 
 /**
  * Recalculate the fov map based on the cursor.
  */
 void view_calc_fov(view_t * view);
-
-/**
- * Check if the map coordinates are visible from the cursor location.
- */
-bool view_in_fov(view_t * view, point_t mloc);
-
-/**
- * Attempt to move the cursor.
- *
- * The z-coord is assumed to mean number of map levels (not tiles).
- */
-bool view_move_cursor(view_t * view, const point_t direction);
 
 static inline void view_to_camera(point_t view, point_t cam)
 {
@@ -72,10 +58,5 @@ static inline void view_to_map(view_t * view, point_t vloc, point_t mloc)
         mloc[X] += view->cursor[X];
         mloc[Y] += view->cursor[Y];
 }
-
-/**
- * Return the map at z, if any.
- */
-map_t *view_z_to_map(view_t * view, int z);
 
 #endif
