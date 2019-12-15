@@ -366,16 +366,15 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                 Uint8 model_index = 0;
                                 model_t *model = NULL;
                                 int flags = 0;
-                                bool cutaway = !view_z && cutaway_at(vloc);
 
-                                switch(pixel) {
+                                switch (pixel) {
                                 case PIXEL_VALUE_GRASS:
 
                                         dst.x =
-                                                view_to_screen_x(view_x, view_y);
+                                            view_to_screen_x(view_x, view_y);
                                         dst.y =
-                                                view_to_screen_y(view_x, view_y,
-                                                                 view_z);
+                                            view_to_screen_y(view_x, view_y,
+                                                             view_z);
                                         dst.w = TILE_WIDTH;
                                         dst.h = TILE_HEIGHT;
 
@@ -396,71 +395,70 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                                        textures[TEXTURE_GRASS],
                                                        &src, &dst);
                                         break;
-                                case PIXEL_VALUE_WALL:
-                                case PIXEL_VALUE_TREE:
-
-                                        /* Cut away anything that obscures the cursor's
-                                         * immediate area. */
-                                        /* if (cutaway && view_z > view->cursor[Z]) { */
-                                        /*         continue; */
-                                        /* } */
-                                        if (session->transparency &&
-                                            blocks_fov(view_x, view_y,
-                                                       model->tile_h)) {
-                                                flags |=
-                                                        MODEL_RENDER_FLAG_TRANSPARENT;
-                                        }
-
-                                        if (pixel == PIXEL_VALUE_WALL) {
-                                                model_render(renderer, model,
-                                                             view_x, view_y,
-                                                             view_z, 200, 200,
-                                                             255, flags);
-                                        } else {
-                                                model_render(renderer, model,
-                                                             view_x, view_y,
-                                                             view_z, 64, 128,
-                                                             64, flags);
-                                        }
-                                        break;
                                 default:
                                         model_index = PIXEL_MODEL(pixel);
                                         if (model_index >= N_MODELS) {
-                                                printf("Unknown pixel value: 0x%08x at (%d, %d, %d) model %d\n",
-                                                       pixel, map_x, map_y, view_z, model_index);
+                                                printf
+                                                    ("Unknown pixel value: 0x%08x at (%d, %d, %d) model %d\n",
+                                                     pixel, map_x, map_y,
+                                                     view_z, model_index);
                                         } else {
                                                 model = &models[model_index];
                                                 if (session->transparency &&
                                                     blocks_fov(view_x, view_y,
                                                                model->tile_h)) {
                                                         flags |=
-                                                                MODEL_RENDER_FLAG_TRANSPARENT;
+                                                            MODEL_RENDER_FLAG_TRANSPARENT;
                                                 }
 
                                                 if (PIXEL_IS_OPAQUE(pixel)) {
-                                                        if (cutaway && map_z == view->cursor[Z]) {
-                                                                map_t *map = view_z_to_map(view,
-                                                                                           map_z
-                                                                                           +
-                                                                                           VIEW_Z_MULT);
+                                                        /* Cut away walls if
+                                                         * they are on the same
+                                                         * level as the
+                                                         * cursor. */
+                                                        bool cutaway = !view_z
+                                                            && cutaway_at(vloc);
+
+                                                        /* Cut away the ceiling
+                                                         * if we cut away a
+                                                         * wall that has a
+                                                         * ceiling. */
+                                                        if (cutaway &&
+                                                            map_z ==
+                                                            view->cursor[Z]) {
+                                                                map_t *map =
+                                                                    view_z_to_map
+                                                                    (view,
+                                                                     map_z +
+                                                                     VIEW_Z_MULT);
                                                                 if (map &&
-                                                                    map_get_pixel(map, map_x,
-                                                                                  map_y)) {
-                                                                        result = false;
+                                                                    map_get_pixel
+                                                                    (map, map_x,
+                                                                     map_y)) {
+                                                                        result =
+                                                                            false;
                                                                 }
                                                         }
 
 
-                                                        /* Truncate cutaway walls. */
+                                                        /* Use the alternate
+                                                         * truncated model for
+                                                         * cutaway walls. */
                                                         if (cutaway) {
-                                                                model = &models[MODEL_INTERIOR];
+                                                                model =
+                                                                    &models
+                                                                    [MODEL_INTERIOR];
                                                         }
                                                 }
-                                                
+
                                                 model_render(renderer, model,
-                                                             view_x, view_y, view_z,
-                                                             PIXEL_RED(pixel), PIXEL_GREEN(pixel), PIXEL_BLUE(pixel), flags);
-                                        } 
+                                                             view_x, view_y,
+                                                             view_z,
+                                                             PIXEL_RED(pixel),
+                                                             PIXEL_GREEN(pixel),
+                                                             PIXEL_BLUE(pixel),
+                                                             flags);
+                                        }
                                         break;
                                 }
                                 view_set_rendered(view_x, view_y,
@@ -676,8 +674,8 @@ int main(int argc, char **argv)
         map_t *map;
         if (!
             (map =
-             map_from_image(args.filenames[0] ? args.
-                            filenames[0] : "map.png"))) {
+             map_from_image(args.
+                            filenames[0] ? args.filenames[0] : "map.png"))) {
                 goto destroy_textures;
         }
 

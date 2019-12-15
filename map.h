@@ -15,7 +15,7 @@
 typedef uint32_t pixel_t;
 typedef SDL_Surface map_t;
 
-/* 
+/*
    Pixel bits
 
    Red       Green     Blue      Alpha     |Color channels
@@ -37,10 +37,10 @@ typedef SDL_Surface map_t;
 #define PIXEL_IS_IMPASSABLE(p) ((p) & PIXEL_MASK_IMPASSABLE)
 
 enum {
-        PIXEL_MASK_OPAQUE =     0x00000100,
+        PIXEL_MASK_OPAQUE = 0x00000100,
         PIXEL_MASK_IMPASSABLE = 0x00000200,
-        PIXEL_MASK_MODEL =      0x0f000000,
-        PIXEL_MASK_HEIGHT =     0x07000000,
+        PIXEL_MASK_MODEL = 0x0f000000,
+        PIXEL_MASK_HEIGHT = 0x07000000,
 };
 
 enum {
@@ -48,9 +48,7 @@ enum {
 };
 
 enum {
-        PIXEL_VALUE_TREE = 0x004001ff,
-        PIXEL_VALUE_GRASS = 0x00ff00ff,
-        PIXEL_VALUE_WALL = 0xffffffff
+        PIXEL_VALUE_GRASS = 0x00ff00ff
 };
 
 
