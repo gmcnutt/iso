@@ -325,7 +325,8 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
         SDL_Rect src, dst;
         view_t *view = &session->view;
         int view_z = map_z - view->cursor[Z];
-        bool result = true;
+        bool clipped_pillar = false;
+        bool top_of_stairs = false;
 
         src.x = 0;
         src.y = 0;
@@ -340,20 +341,12 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                         view_to_map(view, vloc, mloc);
                         int map_y = mloc[Y];
                         int map_x = mloc[X];
+                        Uint8 model_index = 0;
 
                         if (!(map_contains(map, map_x, map_y))) {
                                 continue;
                         }
 
-                        /* Draw the cursor */
-                        if (view_z == 0 &&
-                            map_x == view->cursor[X] &&
-                            map_y == view->cursor[Y]) {
-                                model_render(renderer, &models[MODEL_5x1x1],
-                                             view_x, view_y, view_z, 255, 128,
-                                             64, 0);
-                                continue;
-                        }
 
                         /* Draw the terrain */
                         {
@@ -363,7 +356,6 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                         /* transparent, nothing there */
                                         continue;
                                 }
-                                Uint8 model_index = 0;
                                 model_t *model = NULL;
                                 int flags = 0;
 
@@ -411,7 +403,8 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                                             MODEL_RENDER_FLAG_TRANSPARENT;
                                                 }
 
-                                                if (PIXEL_IS_OPAQUE(pixel)) {
+                                                if (PIXEL_IS_OPAQUE(pixel) &&
+                                                    !PIXEL_IS_STAIRS(pixel)) {
                                                         /* Cut away walls if
                                                          * they are on the same
                                                          * level as the
@@ -435,8 +428,9 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                                                     map_get_pixel
                                                                     (map, map_x,
                                                                      map_y)) {
-                                                                        result =
-                                                                            false;
+                                                                        clipped_pillar
+                                                                            =
+                                                                            true;
                                                                 }
                                                         }
 
@@ -463,10 +457,28 @@ static bool map_render(map_t * map, SDL_Renderer * renderer,
                                 }
                                 view_set_rendered(view_x, view_y,
                                                   model ? model->tile_h : 1);
+
+                                /* Draw the cursor if this is where it is. */
+                                if (view_z == 0 &&
+                                    map_x == view->cursor[X] &&
+                                    map_y == view->cursor[Y]) {
+                                        int off_z = 0;
+                                        if (PIXEL_IS_STAIRS(pixel)) {
+                                                off_z = model_index;
+                                                top_of_stairs =
+                                                    model_index == MODEL_4x1x1;
+                                        }
+                                        model_render(renderer,
+                                                     &models[MODEL_5x1x1],
+                                                     view_x, view_y,
+                                                     view_z + off_z, 255, 128,
+                                                     64, 0);
+                                }
                         }
                 }
         }
-        return result;
+
+        return !clipped_pillar || top_of_stairs;
 }
 
 static void render_iso_test(SDL_Renderer * renderer, SDL_Texture ** textures,
@@ -674,8 +686,8 @@ int main(int argc, char **argv)
         map_t *map;
         if (!
             (map =
-             map_from_image(args.
-                            filenames[0] ? args.filenames[0] : "map.png"))) {
+             map_from_image(args.filenames[0] ? args.
+                            filenames[0] : "map.png"))) {
                 goto destroy_textures;
         }
 
