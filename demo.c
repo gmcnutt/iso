@@ -282,7 +282,7 @@ static int blocks_fov(int view_x, int view_y, int tile_h)
 
 static bool cutaway_at(point_t vloc)
 {
-        int margin = 2;
+        int margin = 1;
         int cam_x = view_to_camera_x(vloc[X] - vloc[Z]);
         int cam_y = view_to_camera_y(vloc[Y] - vloc[Z]);
         return (between(cam_x, -margin, VIEW_Z_MULT + margin) &&
