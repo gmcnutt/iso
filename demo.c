@@ -456,6 +456,7 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                 draw_cursor:
                         /* Draw the cursor if this is where it is. */
                         if (cursor_top_z > map_z &&
+                            map_level >= cursor_level &&
                             map_x == view->cursor[X] &&
                             map_y == view->cursor[Y]) {
                                 int off_z = 0;
@@ -587,18 +588,25 @@ bool move_cursor(area_t *area, view_t * view, const point_t dir)
         point_t newcur, rdir;
         map_t *map;
 
+        /* Figure out where the new point is, at least horizontally. */
         point_copy(newcur, view->cursor);
         point_copy(rdir, dir);
         rdir[Z] = L2Z(dir[Z]);  /* dir z is # levels */
         point_rotate(rdir, view->rotation);
         point_translate(newcur, rdir);
+
+        /* While there is a map at this level that contains the (x, y)
+         * coordinates...  */
         while ((map = area_get_map_at_level(area, Z2L(newcur[Z]))) &&
                map_contains(map, newcur[X], newcur[Y])) {
+
+                /* Find the terrain there. */
                 pixel_t pix = map_get_pixel(map, newcur[X], newcur[Y]);
                 if (! pix) {
-                        /* Hole in the map, try the next level down... */
+                        /* If there's a hole there, try the next level down... */
                         newcur[Z] -= Z_PER_LEVEL;
                 } else {
+                        /* Else if it's passable */
                         if (!PIXEL_IS_IMPASSABLE(pix)) {
                                 int lvl_z = L2Z(Z2L(view->cursor[Z]));
                                 int new_z =  (PIXEL_HEIGHT(pix) + lvl_z);
