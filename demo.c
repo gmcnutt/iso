@@ -473,9 +473,9 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                                  * if it is on top of the stairs, we'll show
                                  * the next level in that case. */
                                 if (PIXEL_IS_STAIRS(pixel)) {
-                                        //off_z = model_index; /* height of model */
-                                        top_of_stairs = true;
-                                        //top_of_stairs = model_index == MODEL_4x1x1;
+                                        if (PIXEL_HEIGHT(pixel) > 1) {
+                                                top_of_stairs = true;
+                                        }
                                 }
                                 model_render(renderer,
                                              model,
