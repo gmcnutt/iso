@@ -26,6 +26,8 @@ typedef struct {
         rotation_t rotation;
         fov_map_t fovs[N_MAPS]; /* one per map */
         int n_fovs;
+        int fov_w;
+        int fov_h;
 } view_t;
 
 /**
@@ -58,5 +60,7 @@ static inline void view_to_map(view_t * view, point_t vloc, point_t mloc)
         mloc[X] += view->cursor[X];
         mloc[Y] += view->cursor[Y];
 }
+
+bool view_in_fov(view_t *view, point_t maploc);
 
 #endif

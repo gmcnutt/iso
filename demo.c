@@ -356,6 +356,7 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                         point_t vloc = { view_x, view_y, view_z };
                         point_t mloc = { 0, 0, 0 };
                         view_to_map(view, vloc, mloc);
+                        mloc[Z] = map_z;
                         int map_y = mloc[Y];
                         int map_x = mloc[X];
                         Uint8 model_index = 0;
@@ -364,6 +365,34 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                                 continue;
                         }
 
+                        if (!view_in_fov(view, mloc)) {
+
+                                dst.x = view_to_screen_x(view_x, view_y);
+                                dst.y = view_to_screen_y(view_x, view_y, view_z);
+                                dst.w = TILE_WIDTH;
+                                dst.h = TILE_HEIGHT;
+                                SDL_SetTextureColorMod(textures[TEXTURE_TOP], 0, 0, 16);
+                                SDL_RenderCopy(renderer,
+                                               textures[TEXTURE_TOP],
+                                               &src, &dst);
+                                continue;
+                        }
+
+                        if (map_level < cursor_level) {
+                                int lvl = map_level;
+                                int skip = false;
+                                while (lvl < cursor_level) {
+                                        lvl++;
+                                        map_t *map = area_get_map_at_level(area, lvl);
+                                        if (map && map_get_pixel (map, map_x, map_y)) {
+                                                skip = true;
+                                                break;
+                                        }
+                                }
+                                if (skip) {
+                                        continue;
+                                }
+                        }
 
                         /* Draw the terrain */
                         pixel_t pixel =
@@ -378,14 +407,10 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                         switch (pixel) {
                         case PIXEL_VALUE_GRASS:
 
-                                dst.x =
-                                        view_to_screen_x(view_x, view_y);
-                                dst.y =
-                                        view_to_screen_y(view_x, view_y,
-                                                         view_z);
+                                dst.x = view_to_screen_x(view_x, view_y);
+                                dst.y = view_to_screen_y(view_x, view_y, view_z);
                                 dst.w = TILE_WIDTH;
                                 dst.h = TILE_HEIGHT;
-
 
                                 if (session->transparency &&
                                     blocks_fov(view_x, view_y, 1)) {

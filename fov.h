@@ -41,8 +41,8 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef fov_h
-#define fov_h
+#ifndef fov_header
+#define fov_header
 
 typedef struct {
         int w, h;

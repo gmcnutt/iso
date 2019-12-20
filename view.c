@@ -16,6 +16,8 @@ int view_init(view_t * view, area_t * maps, bool use_fov)
         for (int i = 0; i < view->n_fovs; i++) {
                 fov_map_t *fov = &view->fovs[i];
                 map_t *map = maps->maps[i];
+                view->fov_w = map_w(map);
+                view->fov_h = map_h(map);
 
                 if ((res = fov_init(fov, map_w(map), map_h(map)))) {
                         view_deinit(view);
@@ -51,3 +53,9 @@ void view_deinit(view_t * view)
         memset(view, 0, sizeof (*view));
 }
 
+bool view_in_fov(view_t *view, point_t maploc)
+{
+        int index = maploc[Y] * view->fov_w + maploc[X];
+        int lvl = Z2L(maploc[Z]);
+        return view->fovs[lvl].vis[index];
+}
