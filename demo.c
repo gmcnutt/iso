@@ -289,7 +289,7 @@ static bool cutaway_at(point_t vloc)
         int margin = 1;
         int cam_x = view_to_camera_x(vloc[X]/* - vloc[Z]*/);
         int cam_y = view_to_camera_y(vloc[Y]/* - vloc[Z]*/);
-        return (cam_x > 0 && cam_y > 0);
+        return (cam_x > -1 && cam_y > -1);
         return (between(cam_x, -margin, Z_PER_LEVEL + margin) &&
                 between(cam_y, -margin, Z_PER_LEVEL + margin));
 }
