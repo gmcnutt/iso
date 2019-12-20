@@ -768,6 +768,7 @@ int main(int argc, char **argv)
         }
 
         view_init(&session.view, &session.area, args.fov);
+        session.view.cursor[Z] = Z_PER_LEVEL * MAP_FLOOR1;
 
         start_ticks = SDL_GetTicks();
         pre_tick = SDL_GetTicks();

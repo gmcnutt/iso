@@ -60,6 +60,7 @@ enum {
 
 
 enum {
+        MAP_FLOOR0,
         MAP_FLOOR1,
         MAP_FLOOR2,
         MAP_FLOOR3,
