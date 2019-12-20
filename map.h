@@ -23,7 +23,7 @@ typedef SDL_Surface map_t;
    .... .... .... .... .... .... XXXX XXXX |Alpha
    .... .... .... .... .... ...X .... .... |1=opaque
    .... .... .... .... .... ..X. .... .... |1=impassable
-   .... .... .... .... .... .x.. .... .... |1=stairs
+   .... .... .... .... .... .X.. .... .... |1=stairs
    .... .XXX .... .... .... .... .... .... |Model type (MODEL_XXX enum)
    XXXX .... XXXX .... XXXX .... .... .... |Terrain ID (and model tint)
    .... X... .... XXXX .... X... .... .... |Reserved
