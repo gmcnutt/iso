@@ -600,9 +600,14 @@ bool move_cursor(area_t *area, view_t * view, const point_t dir)
                         newcur[Z] -= Z_PER_LEVEL;
                 } else {
                         if (!PIXEL_IS_IMPASSABLE(pix)) {
-                                point_copy(view->cursor, newcur);
                                 int lvl_z = L2Z(Z2L(view->cursor[Z]));
-                                view->cursor[Z] = (PIXEL_HEIGHT(pix) + lvl_z);
+                                int new_z =  (PIXEL_HEIGHT(pix) + lvl_z);
+                                if (!(map = area_get_map_at_level(area, Z2L(new_z))) ||
+                                    !map_contains(map, newcur[X], newcur[Y])) {
+                                        return false;
+                                }
+                                point_copy(view->cursor, newcur);
+                                view->cursor[Z] = new_z;
                                 return true;
                         }
                         return false;
