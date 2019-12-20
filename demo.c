@@ -466,13 +466,14 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                                         model = &models[MODEL_H2I(cursor_top_z - map_z)];
                                 } else {
                                         model = &models[MODEL_5x1x1];
+                                        off_z = view->cursor[Z] - map_z;
                                 }
 
                                 /* If cursor is on the stairs offset it up. Note
                                  * if it is on top of the stairs, we'll show
                                  * the next level in that case. */
                                 if (PIXEL_IS_STAIRS(pixel)) {
-                                        off_z = model_index; /* height of model */
+                                        //off_z = model_index; /* height of model */
                                         top_of_stairs = true;
                                         //top_of_stairs = model_index == MODEL_4x1x1;
                                 }
@@ -607,7 +608,10 @@ bool move_cursor(area_t *area, view_t * view, const point_t dir)
                         newcur[Z] -= Z_PER_LEVEL;
                 } else {
                         /* Else if it's passable */
-                        if (!PIXEL_IS_IMPASSABLE(pix)) {
+                        if (PIXEL_IS_IMPASSABLE(pix)) {
+                                if (! PIXEL_IS_STAIRS(pix)) {
+                                        return false;
+                                }
                                 int lvl_z = L2Z(Z2L(newcur[Z]));
                                 int new_z =  (PIXEL_HEIGHT(pix) + lvl_z);
                                 if ((new_z - view->cursor[Z]) > 1) {
@@ -621,7 +625,10 @@ bool move_cursor(area_t *area, view_t * view, const point_t dir)
                                 view->cursor[Z] = new_z;
                                 return true;
                         }
-                        return false;
+                        int new_z = L2Z(Z2L(newcur[Z]));
+                        point_copy(view->cursor, newcur);
+                        view->cursor[Z] = new_z;
+                        return true;
                 }
         }
         return false;
