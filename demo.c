@@ -15,7 +15,8 @@
 enum {
         MODEL_RENDER_FLAG_TRANSPARENT = 1,
         MODEL_RENDER_FLAG_SKIPLEFT = 2,
-        MODEL_RENDER_FLAG_SKIPRIGHT = 4
+        MODEL_RENDER_FLAG_SKIPRIGHT = 4,
+        MODEL_RENDER_FLAG_TOPJUSTIFY = 8
 };
 
 enum {
@@ -319,7 +320,16 @@ static void model_render(SDL_Renderer * renderer, model_t * model, int view_x,
                 dst.w = model->offsets[j].w;
                 dst.h = model->offsets[j].h;
                 dst.x = view_to_screen_x(view_x, view_y) + offset->x;
-                dst.y = view_to_screen_y(view_x, view_y, view_z) - offset->y;
+                if (flags & MODEL_RENDER_FLAG_TOPJUSTIFY) {
+                        dst.y = view_to_screen_y(view_x, view_y, view_z);
+                        int max_offset = (Z_PER_LEVEL * TILE_HEIGHT);
+                        dst.y -= max_offset;
+                        int max_offset_y = (model->tile_h - 1) * TILE_HEIGHT;
+                        int off_z = max(0, max_offset_y - offset->y);
+                        dst.y += off_z;
+                } else {
+                        dst.y = view_to_screen_y(view_x, view_y, view_z) - offset->y;
+                }
                 Uint8 alpha =
                         (flags & MODEL_RENDER_FLAG_TRANSPARENT) ? 128 : 255;
                 SDL_SetTextureAlphaMod(texture, alpha);
@@ -446,6 +456,10 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                        model->tile_h)) {
                                                 flags |=
                                                         MODEL_RENDER_FLAG_TRANSPARENT;
+                                        }
+
+                                        if (PIXEL_IS_FLUID(pixel)) {
+                                                flags |= MODEL_RENDER_FLAG_TOPJUSTIFY;
                                         }
 
                                         if (PIXEL_IS_OPAQUE(pixel) &&

@@ -24,9 +24,10 @@ typedef SDL_Surface map_t;
    .... .... .... .... .... ...X .... .... |1=opaque
    .... .... .... .... .... ..X. .... .... |1=impassable
    .... .... .... .... .... .X.. .... .... |1=stairs
+   .... .... .... .... .... X... .... .... |1=fluid
    .... .XXX .... .... .... .... .... .... |Model type (MODEL_XXX enum)
    XXXX .... XXXX .... XXXX .... .... .... |Terrain ID (and model tint)
-   .... X... .... XXXX .... X... .... .... |Reserved
+   .... X... .... XXXX .... .... .... .... |Reserved
  */
 
 #define PIXEL_RED(p) (Uint8)((p)>>24 & 0xf0)
@@ -37,6 +38,7 @@ typedef SDL_Surface map_t;
 #define PIXEL_IS_OPAQUE(p) ((p) & PIXEL_MASK_OPAQUE)
 #define PIXEL_IS_IMPASSABLE(p) ((p) & PIXEL_MASK_IMPASSABLE)
 #define PIXEL_IS_STAIRS(p) ((p) & PIXEL_MASK_STAIRS)
+#define PIXEL_IS_FLUID(p) ((p) & PIXEL_MASK_FLUID)
 
 #define Z_PER_LEVEL 5
 #define Z2L(z) ((z) / Z_PER_LEVEL)
@@ -46,6 +48,7 @@ enum {
         PIXEL_MASK_OPAQUE = 0x00000100,
         PIXEL_MASK_IMPASSABLE = 0x00000200,
         PIXEL_MASK_STAIRS = 0x00000400,
+        PIXEL_MASK_FLUID = 0x00000800,
         PIXEL_MASK_MODEL = 0x0f000000,
         PIXEL_MASK_HEIGHT = 0x07000000,
 };
