@@ -342,7 +342,7 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
         int cursor_top_z = view->cursor[Z] + cursor_h;
         bool clipped_pillar = false;
         bool top_of_stairs = false;
-        bool enable_cutaway = cursor_level == map_level || cursor_top_z > map_z;
+        bool enable_cutaway = cursor_level == map_level || (cursor_level < map_level && cursor_top_z > map_z);
         map_t *map = area_get_map_at_level(area, map_level);
 
         src.x = 0;
@@ -378,6 +378,10 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                                 continue;
                         }
 
+                        /* Only render tiles on lower levels if they do not
+                         * have a ceiling. This is what prevents us from
+                         * rendering underground levels when walking on the
+                         * surface. */
                         if (map_level < cursor_level) {
                                 int lvl = map_level;
                                 int skip = false;
@@ -613,6 +617,7 @@ bool move_cursor(area_t *area, view_t * view, const point_t dir)
 {
         point_t newcur, rdir;
         map_t *map;
+        bool en_pass = true; /* enable passability checks initially */
 
         /* Figure out where the new point is, at least horizontally. */
         point_copy(newcur, view->cursor);
@@ -631,12 +636,17 @@ bool move_cursor(area_t *area, view_t * view, const point_t dir)
                 if (! pix) {
                         /* If there's a hole there, try the next level down... */
                         newcur[Z] -= Z_PER_LEVEL;
+                        en_pass = false;
                 } else {
-                        /* Else if it's passable */
+                        /* Else if it's impassable... */
                         if (PIXEL_IS_IMPASSABLE(pix)) {
-                                if (! PIXEL_IS_STAIRS(pix)) {
+                                /* And we care, and it's not a stair... */
+                                if (en_pass && ! PIXEL_IS_STAIRS(pix)) {
+                                        /* Can't go here */
                                         return false;
                                 }
+
+                                /* Else we'll take it. */
                                 int lvl_z = L2Z(Z2L(newcur[Z]));
                                 int new_z =  (PIXEL_HEIGHT(pix) + lvl_z);
                                 if ((new_z - view->cursor[Z]) > 1) {
