@@ -450,6 +450,11 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                  pixel, map_x, map_y,
                                                  view_z, model_index);
                                 } else {
+                                        if (PIXEL_IS_FLUID(pixel)) {
+                                                flags |= MODEL_RENDER_FLAG_TOPJUSTIFY;
+                                                model_index = (MODEL_5x1x1 + 1) - model_index;
+                                        }
+
                                         model = &models[model_index];
                                         if (session->transparency &&
                                             blocks_fov(view_x, view_y,
@@ -458,9 +463,6 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                                                         MODEL_RENDER_FLAG_TRANSPARENT;
                                         }
 
-                                        if (PIXEL_IS_FLUID(pixel)) {
-                                                flags |= MODEL_RENDER_FLAG_TOPJUSTIFY;
-                                        }
 
                                         if (PIXEL_IS_OPAQUE(pixel) &&
                                             !PIXEL_IS_STAIRS(pixel)) {
@@ -631,7 +633,6 @@ bool move_cursor(area_t *area, view_t * view, const point_t dir)
 {
         point_t newcur, rdir;
         map_t *map;
-        bool en_pass = true; /* enable passability checks initially */
 
         /* Figure out where the new point is, at least horizontally. */
         point_copy(newcur, view->cursor);
@@ -650,15 +651,9 @@ bool move_cursor(area_t *area, view_t * view, const point_t dir)
                 if (! pix) {
                         /* If there's a hole there, try the next level down... */
                         newcur[Z] -= Z_PER_LEVEL;
-                        en_pass = false;
                 } else {
                         /* Else if it's impassable... */
-                        if (PIXEL_IS_IMPASSABLE(pix)) {
-                                /* And we care, and it's not a stair... */
-                                if (en_pass && ! PIXEL_IS_STAIRS(pix)) {
-                                        /* Can't go here */
-                                        return false;
-                                }
+                        if (PIXEL_IS_IMPASSABLE(pix) || PIXEL_IS_FLUID(pix)) {
 
                                 /* Else we'll take it. */
                                 int lvl_z = L2Z(Z2L(newcur[Z]));
