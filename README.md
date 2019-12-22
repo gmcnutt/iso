@@ -15,7 +15,7 @@ git@github.com:gmcnutt/cutils.git.
 
 Example:
 
-    ./demo -i moongate_clearing.png,moongate_clearing_l2.png
+    ./demo -i mc0.png,mc1.png,mc2.png,mc3.png
 
 You can stack up to 3 maps. They must be the same size.
 
@@ -24,6 +24,7 @@ Key bindings:
     <arrow> - move cursor
     .,      - rotate camera
     t       - toggle transparency
+    <page up/down> - move up and down between levels (if passable)
 
 Clicking a tile prints some info on stdout.
 
