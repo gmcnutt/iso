@@ -409,8 +409,7 @@ static bool render_level(SDL_Renderer * renderer, SDL_Texture ** textures,
                         }
 
                         /* Draw the terrain */
-                        pixel_t pixel =
-                                map_get_pixel(map, map_x, map_y);
+                        pixel_t pixel = map_get_pixel(map, map_x, map_y);
                         if (!pixel) {
                                 /* transparent, nothing there */
                                 goto draw_cursor;
@@ -549,22 +548,22 @@ static void render(SDL_Renderer * renderer, SDL_Texture ** textures,
         view_calc_fov(view);
 
         /* Render the maps in z order */
-        for (int i = 0; i < session->area.n_maps; i++) {
-                map_t *map = session->area.maps[i];
+        for (int level = 0; level < session->area.n_maps; level++) {
+                map_t *map = session->area.maps[level];
 
                 /* But if the cursor is now directly underneath a tile on a
                  * higher level, stop rendering higher levels. This implements
                  * roof clipping. What if the cursor is standing under a hole?
                  * The roof won't get clipped, I think, when it probably
                  * should. */
-                if ((i > cursor_level) &&
+                if ((level > cursor_level) &&
                     map_get_pixel(map, view->cursor[X], view->cursor[Y])) {
                         break;
                 }
 
                 /* Or if the rendering says to stop, then clip the higher
                  * levels. */
-                if (!render_level(renderer, textures, session, &session->area, i)) {
+                if (!render_level(renderer, textures, session, &session->area, level)) {
                         break;
                 }
 
